@@ -6,18 +6,25 @@ class plugin():
     parser = None
     localSession = None
     logger = None
+    disabledMessage = "Plugin disabled, doing nothing"
 
     def baseInitialize(self, parser, lc, name):
         self.logger= logging.getLogger("plugin base")
         self.logger.setLevel(logging.INFO)
         pluginName = os.path.splitext(os.path.basename(name))[0]
-        import code
-        code.interact(local=locals())
         if pluginName not in parser.sections():
             self.logger.error("Could not load config file for %s network,\
                     exiting", pluginName)
+        enabled = True
         try:
-            logLevel = self.parser.get(pluginName, 'loglevel')
+            en = parser.get(pluginName, 'enable')
+            if en == 'False':
+                enabled = False
+        except:
+            pass
+
+        try:
+            logLevel = parser.get(pluginName, 'loglevel')
             if logLevel == "DEBUG":
                 returnLevel = logging.DEBUG
             if logLevel == "INFO":
@@ -29,7 +36,9 @@ class plugin():
             if logLevel == "CRITICAL":
                 returnLevel = logging.CRITICAL
             else:
+                logger.error("logLevel from config file unknown,"+\
+                        "switching to INFO")
                 returnLevel = logging.INFO
         except:
             returnLevel = logging.INFO
-        return returnLevel, pluginName
+        return enabled, returnLevel, pluginName

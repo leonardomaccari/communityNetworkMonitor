@@ -1,8 +1,10 @@
 from plugin import plugin
 
 from dbmanager import *
+#FIXME move this to dbmanager
+from sqlalchemy.exc import  SQLAlchemyError
 import logging
-import os
+import networkx as nx
 
 class ninux(plugin):
     logger = None
@@ -12,11 +14,12 @@ class ninux(plugin):
     dbPort = None
     dbName = ""
     pluginName = ""
+    enabled = True
 
     def initialize(self, parser, lc):
         self.parser = parser
-        logLevel, self.pluginName = plugin.baseInitialize(self, parser, 
-                lc, __file__)
+        self.enabled, logLevel, self.pluginName = plugin.baseInitialize(self, 
+                parser, lc, __file__)
         self.logger = logging.getLogger(self.pluginName)
         self.logger.setLevel(logLevel)
         self.localSession = lc
@@ -26,10 +29,15 @@ class ninux(plugin):
         self.dbPort = self.parser.get('ninux', 'port')
         self.dbName = self.parser.get('ninux', 'db')
     
-    def getNinuxStats(self):
+    def getStats(self):
     
+        if self.enabled == False:
+            self.logger.info(plugin.disabledMessage)
+            return
         ninuxURL = 'mysql://'+self.userName+":"+self.userPasswd+"@"+\
         self.dbURL+":"+self.dbPort+"/"+self.dbName
+
+        self.logger.info("Getting data from Ninux network")
         engine = create_engine(ninuxURL)
         DBSession = sessionmaker(bind=engine)
         session = DBSession()
@@ -43,36 +51,29 @@ class ninux(plugin):
         sifc.id = link.from_interface_id and difc.id = link.to_interface_id and
         difc.device_id = ddev.id and ddev.node_id = dnode.id"""
     
-        q = session.query("sid", "sname", "did", "dname", "etx_v").from_statement(
-                etxQuery)
+        q = session.query("sid", "sname", "did", "dname", "etx_v").\
+            from_statement(etxQuery)
+
         try:
             c = len(q.all())
             if c==0:
                 self.logger.error("no results from ninux DB!")
+                return 
         except:
+            #FIXME add error message from the DB
             self.logger.error("could not connect to ninux DB!")
-        return 
-        nodes = {}
-        newScan = scan()
+            return 
+
+        newScan = scan(network="NINUX")
         self.localSession.add(newScan)
+        g = nx.Graph()
         for [sid, sname, did, dname, etxValue] in q:
-            if sid not in nodes.keys():
-                tmps = node(Id=int(sid))#, name=str(sname))
-                nodes[sid] = tmps 
-            else:
-                tmps = nodes[sid]
-            if did not in nodes.keys():
-                tmpd = node(Id=int(did))#, name=str(dname))
-                nodes[did] = tmpd 
-            else:
-                tmpd = nodes[did]
-    
-            newLink = link(from_node_r=tmps, to_node_r=tmpd, scan_Id_r=newScan)
-            newEtx = etx(link_r=newLink, etx_value=etxValue)
-            self.localSession.add(newLink)
-            self.localSession.add(newEtx)
+            g.add_node(sid)
+            g.add_node(did)
+            g.add_edge(sid,did,weight=etxValue)
         try:
             self.localSession.commit()
-        except:
-            logger.error("could not write to local db")
+        except  SQLAlchemyError as e:
+            self.logger.error("could not write to local db: "+e.message)
+        addGraphToDB(g,self.localSession, newScan)
     

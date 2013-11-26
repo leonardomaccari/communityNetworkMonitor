@@ -17,38 +17,61 @@ class FFGraz(plugin):
     url = ""
     logger = None
     pluginName = ""
+    enabled = True
 
     def initialize(self, parser, lc):
         self.localSession = lc
         self.url=parser.get('FFGraz', 'baseTopoURL')
+        self.enabled, logLevel, self.pluginName = plugin.baseInitialize(self, 
+                parser, lc, __file__)
         self.logger = logging.getLogger(self.pluginName)
-        logLevel, self.pluginName = plugin.baseInitialize(self, parser, 
-                lc, __file__)
         self.logger.setLevel(logLevel)
 
     def getStats(self):
         """ Get the topology from FFGraz and elaborate it, returns a weighted 
         graph"""
-    
+        
+        if self.enabled == False:
+           self.logger.info(plugin.disabledMessage) 
+           return
+        self.logger.info("Getting data from FFGraz network")
         mech = Browser()
         mech.set_handle_robots(False)
         lastDateFromDB = self.localSession.query(topo_file).\
             order_by(desc(topo_file.time)).limit(1).all()
     
         if len(lastDateFromDB) == 0:
-            lastDate = datetime.strptime("2010-Nov-01 12:09:12", "%Y-%b-%d %H:%M:%S")
+            lastDate = datetime.strptime("2000-Nov-01 12:00:00", 
+                    "%Y-%b-%d %H:%M:%S")
         else:
             lastDate = lastDateFromDB[0].time
     
         newScan = scan(network="FFGRAZ")
     
-        #FIXME get date of last scan of Graz
-        year, newDate = self.getLastEntry(lastDate, self.url, mech)
-        month, newDate = self.getLastEntry(lastDate, year, mech)
-        fileName, newDate = self.getLastEntry(lastDate, month, mech)
-        
-        topoFile = mech.retrieve(fileName)
-        f = gzip.open(topoFile[0])
+        fileName = None
+        newDate = None
+        year, newDate = self.getLastEntry(self.url, mech)
+        month, newDate = self.getLastEntry(year, mech)
+        fileName, newDate = self.getLastEntry(month, mech)
+
+        if newDate <= lastDate:
+            self.logger.error("Did not find an entry newer than "+\
+                    str(lastDate))
+            return
+
+        if fileName == None and newDate == None:
+            return 
+
+        try:
+            topoFile = mech.retrieve(fileName)
+        except: 
+            self.logger.error("Could not retrieve file "+fileName)
+            return
+        try: 
+            f = gzip.open(topoFile[0])
+        except:
+            self.logger.error("Could not open temporary file "+topoFile[0])
+            return
         
         graphString = ""
         for l in f:
@@ -68,7 +91,6 @@ class FFGraz(plugin):
         for l in toBeRemoved:
             pG.remove_edge(l[0], l[1])
         simpleG = self.aggregateNodesByName(pG)
-        # remove self-links
         for e in simpleG.edges():
             if e[0] == e[1]:
                 simpleG.remove_edge(e[0], e[1])
@@ -79,9 +101,9 @@ class FFGraz(plugin):
     
     def aggregateNodesByName(self, graph):
         """ this function takes a graph with node names of the kind x.y.z and
-        aggregates nodes. It will check if two nodes x1.y.z and x2.y.z have an ETX
-        != 1, in this case they will be aggregated, x2.y.z will disappear and x1.y.z
-        will get its links """
+        aggregates nodes. It will check if two nodes x1.y.z and x2.y.z have an 
+        ETX != 1, in this case they will be aggregated, x2.y.z will disappear 
+        and x1.y.z will get its links """
     
         p = tree() # a tree structure addressable as dict of dicts
         nodesAggregation = {}
@@ -144,27 +166,28 @@ class FFGraz(plugin):
                     simpleG[fromNode][toNode]['weight'] > e[2]['weight']:
                 simpleG.add_edge(fromNode, toNode, weight=e[2]['weight'])
     
-    def getLastEntry(self, prevEntryDate, url, browser):
+    def getLastEntry(self, url, browser):
         """ get one entry from an HTML table list if it is newer 
         than prevEntry. Format is from graz FF site"""
         try:
             page = browser.open(url)
         except :
-            return ""
+            self.logger.error("Could not read url "+url)
+            return None, None
         html = page.read()
         soup = BeautifulSoup(html)
         table = soup.find('table')
         #FIXME we need a logging system here, and to handle return parameters on
         # errors
         if len(table) == 0:
-            print >> sys.stderr, "No table found in", url
-            return "", ""
+            self.logger.error("No table found in "+url)
+            return None, None
     
         rowLink = "" 
         row = table.findAll('tr')[-1]
         if len(row) == 0:
-            print >> sys.stderr, "No row found in table in", url
-            return "", ""
+            self.logger.error("No row found in "+url)
+            return None, None
     
         for col in row:
             if col['class'] == 'm':
@@ -173,7 +196,5 @@ class FFGraz(plugin):
                     link = col.findAll('a')
                     if len(link) != 0:
                         rowLink = url+link[0].get('href')
-        if rowDate > prevEntryDate:
-            return rowLink, rowDate
-        return "", rowDate
+        return rowLink, rowDate
 

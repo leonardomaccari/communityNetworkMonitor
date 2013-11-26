@@ -8,20 +8,18 @@ import logging
 import dbmanager
 from plugins.ninux import ninux 
 from plugins.FFGraz import FFGraz
+# import here future plugin code
 
 def getConfig():
     parser = SafeConfigParser()
-    configFiles = glob("../conf/accesskeys/*.conf")
-    configFiles += glob("../conf/*.conf")
-    readFiles = parser.read(configFiles)
-    if readFiles == []:
-        print >> sys.stderr, "ERROR: No config file found in ",\
-                "../conf/accesskeys/ !"
-    return readFiles, parser
+    pluginConfigFiles = glob("../conf/accesskeys/*.conf")
+    mainConfigFile = glob("../conf/*.conf")
+    return parser.read(pluginConfigFiles), parser.read(mainConfigFile),\
+            parser
 
 if __name__ == '__main__':
 
-    configFiles, parser = getConfig()
+    pluginConfigFiles, mainConfigFile, parser = getConfig()
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     sHandler = logging.StreamHandler()
@@ -34,21 +32,20 @@ if __name__ == '__main__':
     fHandler.setFormatter(fFormatter)
     logger.addHandler(sHandler)
     logger.addHandler(fHandler)
-    lg = logging.getLogger("puppa")
-    lg.error('XX')
-    logger.error('XXX')
+
+    if mainConfigFile == []:
+        logger.critical("Could not read main config file")
+        sys.exit(1)
+    if pluginConfigFiles == []:
+        logger.critical("Could not read config files")
+        sys.exit(1)
+    logger.info("Starting topologyAnalyser daemon")
     localSession = dbmanager.initializeDB(parser)
-    #getNinuxStats(parser, localSession)
-    #ffg = FFGraz()
-    #ffg.initialize(parser, localSession)
-    #ffg.getFFGrazStats()
-    nn = FFGraz()
-    nn.initialize(parser, localSession)
-    nn.getStats()
-
-    sys.exit()
-
+    ffg = FFGraz()
+    ffg.initialize(parser, localSession)
+    ffg.getStats()
+    nnx = ninux()
+    nnx.initialize(parser, localSession)
+    nnx.getStats()
     #TODO make a thread to run multiple scan every X minutes
-    # separate the code in distinct files for each network, corresponding 
-    # to each thread
 
