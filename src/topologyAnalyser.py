@@ -4,6 +4,7 @@ from ConfigParser import SafeConfigParser
 from glob import glob
 import sys
 import logging
+import time
 
 import dbmanager
 from plugins.plugin import plugin
@@ -42,19 +43,40 @@ if __name__ == '__main__':
     logger.info("Starting topologyAnalyser daemon")
     localSession = dbmanager.initializeDB(parser)
 
+    threadList = []
+
     ffg = FFGraz()
     ffg.initialize(parser, localSession)
     nnx = ninux()
     nnx.initialize(parser, localSession)
+    
+    threadList.append(nnx)
+    threadList.append(ffg)
 
-    nnx.start()
-    ffg.start()
+    try:
+        for i in threadList:
+            i.daemon = True
+            i.start()
+        while True:
+            for i in threadList:
+                i.join(1)
+        #ffg.start()
+    except KeyboardInterrupt:
+        for i in threadList:
+            i.exitAll = True
+        #raise
+    waitTime = 20
+    while True:
+        a = sum([i.is_alive() for i in threadList])
+        if a != 0:
+            logger.info("Waiting %s seconds for %d threads to gracefully exit", waitTime, a)
+        else:
+            break
+        if waitTime <= 0:
+            logger.info("Ok, killing the threads")
+            sys.exit()
+        time.sleep(5)
+        waitTime -= 5
+    logger.info("Ok, all thread exited gracefully")
 
-    #try:
-    #    nnx.start()
-    #    #ffg.start()
-    #except KeyboardInterrupt:
-    #    nnx.exitAll = True
-    #    print "XXX"
-    #    raise
 

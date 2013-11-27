@@ -4,6 +4,7 @@ from ConfigParser import Error
 from sqlalchemy.exc import  SQLAlchemyError
 import logging
 import networkx as nx
+import time
 
 from dbmanager import *
 
@@ -28,7 +29,7 @@ class ninux(plugin):
             if self.enabled == True:
                 sys.exit()
         try:
-            self.period = plugin.convertTime(self.parser.get('ninux', 'period'))
+            self.period = plugin.convertTime(self, self.parser.get('ninux', 'period'))
         except:
             self.period = 300
     

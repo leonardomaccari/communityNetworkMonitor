@@ -56,16 +56,21 @@ class plugin(Thread):
 
         unit = s[-1]
         value = int(s[0:-1])
+        if unit == 's':
+            return value
         if unit == 'm':
             return 60*value
         if unit == 'h':
             return 60*60*value
         if unit == 'd':
             return 60*60*24*value
-        return unit
+        raise
 
     def run(self):
         #self.localSession = self.localSession()
-        while not plugin.exitAll:
+        while not self.exitAll:
             self.getStats()
-            time.sleep(self.period)
+            for i in range(self.period):
+                time.sleep(1)
+                if self.exitAll:
+                    break
