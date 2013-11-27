@@ -8,6 +8,7 @@ import pygraphviz as pg
 import networkx as nx
 import collections
 import logging
+import os
  
 from plugin import plugin
 from dbmanager import *
@@ -102,6 +103,8 @@ class FFGraz(plugin):
         newFile = topo_file(file_url=fileName, scan_Id_r=newScan, time=newDate)
         self.localSession.add(newFile)
         addGraphToDB(simpleG, self.localSession, newScan)
+        f.close()
+        os.remove(f[0])
     
     def aggregateNodesByName(self, graph):
         """ this function takes a graph with node names of the kind x.y.z and
