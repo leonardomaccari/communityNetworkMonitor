@@ -203,9 +203,3 @@ class FFGraz(plugin):
                     if len(link) != 0:
                         rowLink = url+link[0].get('href')
         return rowLink, rowDate
-
-    def run(self):
-        while not plugin.exitAll:
-            self.getStats()
-            time.sleep(self.period)
-       

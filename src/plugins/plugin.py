@@ -2,6 +2,7 @@ from dbmanager import *
 import logging
 import os
 import sys
+import time
 from threading import Thread
 
 class plugin(Thread):
@@ -63,4 +64,8 @@ class plugin(Thread):
             return 60*60*24*value
         return unit
 
-
+    def run(self):
+        #self.localSession = self.localSession()
+        while not plugin.exitAll:
+            self.getStats()
+            time.sleep(self.period)

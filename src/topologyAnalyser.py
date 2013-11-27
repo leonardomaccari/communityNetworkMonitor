@@ -44,17 +44,17 @@ if __name__ == '__main__':
 
     ffg = FFGraz()
     ffg.initialize(parser, localSession)
-    ffg.start()
     nnx = ninux()
     nnx.initialize(parser, localSession)
-    nnx.start()
 
-    # TODO make this script exit when ctrl-c is pressed
+    nnx.start()
+    ffg.start()
+
     #try:
     #    nnx.start()
+    #    #ffg.start()
     #except KeyboardInterrupt:
-    #    a = plugin()
-    #    a.exitAll = True
+    #    nnx.exitAll = True
     #    print "XXX"
     #    raise
 

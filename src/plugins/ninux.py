@@ -1,7 +1,6 @@
 from plugin import plugin
 from threading import Thread
 from ConfigParser import Error
-import time
 from sqlalchemy.exc import  SQLAlchemyError
 import logging
 import networkx as nx
@@ -80,8 +79,3 @@ class ninux(plugin):
                 self.logger.error("could not write to local db: "+e.message)
         addGraphToDB(g, self.localSession, newScan)
 
-    def run(self):
-        #self.localSession = self.localSession()
-        while not plugin.exitAll:
-            self.getStats()
-            time.sleep(self.period)
