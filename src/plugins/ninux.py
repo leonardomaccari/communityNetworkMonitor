@@ -1,33 +1,37 @@
 from plugin import plugin
-
-from dbmanager import *
-#FIXME move this to dbmanager
+from threading import Thread
+from ConfigParser import Error
+import time
 from sqlalchemy.exc import  SQLAlchemyError
 import logging
 import networkx as nx
 
-class ninux(plugin):
-    logger = None
-    userName = ""
-    userPasswd = ""
-    dbURL = ""
-    dbPort = None
-    dbName = ""
-    pluginName = ""
-    enabled = True
+from dbmanager import *
 
+class ninux(plugin):
+    def __init__(self):
+        Thread.__init__(self)
     def initialize(self, parser, lc):
+        self.localSession = lc
         self.parser = parser
         self.enabled, logLevel, self.pluginName = plugin.baseInitialize(self, 
-                parser, lc, __file__)
+                parser, __file__)
         self.logger = logging.getLogger(self.pluginName)
         self.logger.setLevel(logLevel)
-        self.localSession = lc
-        self.userName = self.parser.get('ninux', 'user')
-        self.userPasswd = self.parser.get('ninux', 'passwd')
-        self.dbURL = self.parser.get('ninux', 'url')
-        self.dbPort = self.parser.get('ninux', 'port')
-        self.dbName = self.parser.get('ninux', 'db')
+        try:
+            self.userName = self.parser.get('ninux', 'user')
+            self.userPasswd = self.parser.get('ninux', 'passwd')
+            self.dbURL = self.parser.get('ninux', 'url')
+            self.dbPort = self.parser.get('ninux', 'port')
+            self.dbName = self.parser.get('ninux', 'db')
+        except Error as e:
+            self.logger.error("Could not initalize ninux plugin. \'"+e+"\'")
+            if self.enabled == True:
+                sys.exit()
+        try:
+            self.period = plugin.convertTime(self.parser.get('ninux', 'period'))
+        except:
+            self.period = 300
     
     def getStats(self):
     
@@ -68,12 +72,16 @@ class ninux(plugin):
         self.localSession.add(newScan)
         g = nx.Graph()
         for [sid, sname, did, dname, etxValue] in q:
-            g.add_node(sid)
-            g.add_node(did)
-            g.add_edge(sid,did,weight=etxValue)
-        try:
-            self.localSession.commit()
-        except  SQLAlchemyError as e:
-            self.logger.error("could not write to local db: "+e.message)
-        addGraphToDB(g,self.localSession, newScan)
-    
+            try:
+                g.add_node(sid)
+                g.add_node(did)
+                g.add_edge(sid,did,weight=etxValue)
+            except  SQLAlchemyError as e:
+                self.logger.error("could not write to local db: "+e.message)
+        addGraphToDB(g, self.localSession, newScan)
+
+    def run(self):
+        #self.localSession = self.localSession()
+        while not plugin.exitAll:
+            self.getStats()
+            time.sleep(self.period)

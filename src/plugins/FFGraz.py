@@ -1,6 +1,7 @@
-from dbmanager import *
 from mechanize import Browser
-from plugin import plugin
+from threading import Thread
+from ConfigParser import Error
+import time
 from BeautifulSoup import BeautifulSoup
 import gzip
 import pygraphviz as pg
@@ -8,28 +9,31 @@ import networkx as nx
 import collections
 import logging
  
+from plugin import plugin
+from dbmanager import *
+
 def tree():
     return collections.defaultdict(tree)
 
 class FFGraz(plugin):
-    localSession = None
-    logger = None
-    url = ""
-    logger = None
-    pluginName = ""
-    enabled = True
+
+    def __init__(self):
+        Thread.__init__(self)
 
     def initialize(self, parser, lc):
         self.localSession = lc
         self.url=parser.get('FFGraz', 'baseTopoURL')
         self.enabled, logLevel, self.pluginName = plugin.baseInitialize(self, 
-                parser, lc, __file__)
+                parser, __file__)
         self.logger = logging.getLogger(self.pluginName)
         self.logger.setLevel(logLevel)
+        try:
+            self.period = plugin.convertTime(self.parser.get('ninux', 'period'))
+        except:
+            self.period = 600
 
     def getStats(self):
-        """ Get the topology from FFGraz and elaborate it, returns a weighted 
-        graph"""
+        """ Get the topology from FFGraz, elaborate it and store in the DB """
         
         if self.enabled == False:
            self.logger.info(plugin.disabledMessage) 
@@ -54,13 +58,14 @@ class FFGraz(plugin):
         month, newDate = self.getLastEntry(year, mech)
         fileName, newDate = self.getLastEntry(month, mech)
 
+        if fileName == None and newDate == None:
+            return 
+
         if newDate <= lastDate:
             self.logger.error("Did not find an entry newer than "+\
                     str(lastDate))
             return
 
-        if fileName == None and newDate == None:
-            return 
 
         try:
             topoFile = mech.retrieve(fileName)
@@ -96,7 +101,6 @@ class FFGraz(plugin):
                 simpleG.remove_edge(e[0], e[1])
         newFile = topo_file(file_url=fileName, scan_Id_r=newScan, time=newDate)
         self.localSession.add(newFile)
-        self.localSession.commit()
         addGraphToDB(simpleG, self.localSession, newScan)
     
     def aggregateNodesByName(self, graph):
@@ -172,6 +176,8 @@ class FFGraz(plugin):
         try:
             page = browser.open(url)
         except :
+            if url == None:
+                url = "(empty url)"
             self.logger.error("Could not read url "+url)
             return None, None
         html = page.read()
@@ -198,3 +204,8 @@ class FFGraz(plugin):
                         rowLink = url+link[0].get('href')
         return rowLink, rowDate
 
+    def run(self):
+        while not plugin.exitAll:
+            self.getStats()
+            time.sleep(self.period)
+       

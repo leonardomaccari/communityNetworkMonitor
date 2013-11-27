@@ -1,4 +1,4 @@
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm import relationship, sessionmaker, scoped_session
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, ForeignKey, Integer, String, DateTime, Float
 from sqlalchemy import create_engine, desc
@@ -6,6 +6,8 @@ from datetime import datetime
 from random import random
 
 Base = declarative_base()
+
+# objects representing the local database 
 
 class scan(Base):
     __tablename__ = 'scan'
@@ -54,29 +56,9 @@ class etx(Base):
     etx_value = Column(Float)
     link_r = relationship(link)
 
-def addTestScan(session, numNodes, randomize):
-    newscan = scan()
-    session.add(newscan)
-    for i in range(numNodes):
-        session.merge(node(name="test-node-"+str(i)))
-    if randomize:
-        ip = int((256-numNodes)*random())
-        session.merge(node("test-node-" + str(numNodes+ip)))
-    nodes = session.query(node)
-    for i in range(numNodes):
-        l = session.merge(link(scan_Id_r = newscan, multi_link_number=0,
-            from_node_r = nodes[i], to_node_r = nodes[(i+1)%numNodes]))
-        session.merge(etx(etx_value=1+random(), link_r=l))
-    if randomize:
-        r1 = int(random()*numNodes)
-        r2 = int(random()*numNodes)
-        l = session.merge(link(scan_Id_r = newscan, multi_link_number=0,
-            from_node_r = nodes[r1], to_node_r = nodes[r2]))
-        session.merge(etx(etx_value=1+random(), link_r=l))
-    session.commit()
-
-
 def addGraphToDB(graph, localSession, scanId):
+    """ transforms a nx graph in db entries """
+
     nodes = {}
     for edge in graph.edges(data=True):
         sid = edge[0]
@@ -114,7 +96,6 @@ def addGraphToDB(graph, localSession, scanId):
         newEtx = etx(link_r=newLink, etx_value=etxValue)
         localSession.add(newLink)
         localSession.add(newEtx)
-    localSession.commit()
     #FIXME should return something here
 
 def initializeDB(parser):
@@ -122,7 +103,7 @@ def initializeDB(parser):
     database =  parser.get('main', 'localdb')
     engine = create_engine(database)
     Base.metadata.create_all(engine)
-    DBSession = sessionmaker(bind=engine)
-    localSession = DBSession()
+    sessionFactory = sessionmaker(bind=engine, autocommit=True)
+    localSession = scoped_session(sessionFactory)
     return localSession
 

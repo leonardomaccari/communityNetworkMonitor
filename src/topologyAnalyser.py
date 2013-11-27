@@ -6,19 +6,19 @@ import sys
 import logging
 
 import dbmanager
+from plugins.plugin import plugin
 from plugins.ninux import ninux 
 from plugins.FFGraz import FFGraz
 # import here future plugin code
 
 def getConfig():
+    """ parse config files in ../conf/ """
     parser = SafeConfigParser()
     pluginConfigFiles = glob("../conf/accesskeys/*.conf")
     mainConfigFile = glob("../conf/*.conf")
     return parser.read(pluginConfigFiles), parser.read(mainConfigFile),\
             parser
-
 if __name__ == '__main__':
-
     pluginConfigFiles, mainConfigFile, parser = getConfig()
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
@@ -41,11 +41,20 @@ if __name__ == '__main__':
         sys.exit(1)
     logger.info("Starting topologyAnalyser daemon")
     localSession = dbmanager.initializeDB(parser)
+
     ffg = FFGraz()
     ffg.initialize(parser, localSession)
-    ffg.getStats()
+    ffg.start()
     nnx = ninux()
     nnx.initialize(parser, localSession)
-    nnx.getStats()
-    #TODO make a thread to run multiple scan every X minutes
+    nnx.start()
+
+    # TODO make this script exit when ctrl-c is pressed
+    #try:
+    #    nnx.start()
+    #except KeyboardInterrupt:
+    #    a = plugin()
+    #    a.exitAll = True
+    #    print "XXX"
+    #    raise
 
