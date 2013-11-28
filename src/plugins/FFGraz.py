@@ -85,6 +85,9 @@ class FFGraz(plugin):
         G = pg.AGraph(encoding='UTF-8')
         Ga = G.from_string(graphString)
         pG = nx.from_agraph(Ga)
+        # note that FFGraz nodes are taken from the .dot file, 
+        # so we don't have numerical IDs. In the DB the node_Id 
+        # will be just the node name
         toBeRemoved = []
         for e in pG.edges(data=True):
             if str(e[2]['label']) != 'HNA': 
@@ -149,9 +152,9 @@ class FFGraz(plugin):
             ags = nodesAggregation[s]
             agd = nodesAggregation[d]
             if ags not in aggregatedG:
-                aggregatedG.add_node(ags)
+                aggregatedG.add_node(ags, name=str(ags))
             if agd not in aggregatedG:
-                aggregatedG.add_node(agd)
+                aggregatedG.add_node(agd, name=str(agd))
             aggregatedG.add_edge(ags,agd, weight=data['weight'])
     
         return aggregatedG

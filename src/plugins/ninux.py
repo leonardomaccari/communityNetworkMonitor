@@ -5,6 +5,7 @@ from sqlalchemy.exc import  SQLAlchemyError
 import logging
 import networkx as nx
 import time
+import chardet
 
 from dbmanager import *
 
@@ -71,10 +72,19 @@ class ninux(plugin):
         newScan = scan(network="NINUX")
         self.localSession.add(newScan)
         g = nx.Graph()
-        for [sid, sname, did, dname, etxValue] in q:
+        for [sid, sn, did, dn, etxValue] in q:
+            # some strings in ninux DB are encoded not in weird
+            # encodings, guess the encoding and convert
+            sname = sn.decode(chardet.detect(sn)['encoding'])
+            dname = dn.decode(chardet.detect(dn)['encoding'])
             try:
-                g.add_node(sid)
-                g.add_node(did)
+                #code.interact(local=locals())
+                g.add_node(sid,
+                        name=sname)
+                #        name=sname.encode('utf-8').decode('utf-8'))
+                g.add_node(did,
+                        name=dname)
+                #    name=dname.encode('utf-8').decode('utf-8'))
                 g.add_edge(sid,did,weight=etxValue)
             except  SQLAlchemyError as e:
                 self.logger.error("could not write to local db: "+e.message)

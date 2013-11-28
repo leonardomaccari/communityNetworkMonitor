@@ -25,12 +25,16 @@ class topo_file(Base):
 
 class node(Base):
     __tablename__ = 'node'
+    Id = Column(String(50), primary_key=True)
+    scan_Id = Column(Integer, ForeignKey('scan.Id'), primary_key=True)
+    name = Column(String(50))
+    scan_Id_r = relationship(scan)
+
+class network(Base):
+    __tablename__ = 'network'
     Id = Column(Integer, primary_key=True)
     name = Column(String(50))
-    links_outgoing = relationship("link", order_by="link.Id", 
-            primaryjoin = "link.from_node_Id == node.Id")
-    links_ingoing = relationship("link", order_by="link.Id", 
-            primaryjoin = "link.to_node_Id == node.Id")
+    desc = Column(String(100))
 
 class link(Base):
     __tablename__ = 'link'
@@ -56,7 +60,7 @@ class etx(Base):
     etx_value = Column(Float)
     link_r = relationship(link)
 
-def addGraphToDB(graph, localSession, scanId):
+def addGraphToDB(graph, localSession, scanId, checkPresence=False):
     """ transforms a nx graph in db entries """
 
     nodes = {}
@@ -64,33 +68,44 @@ def addGraphToDB(graph, localSession, scanId):
         sid = edge[0]
         did = edge[1]
         etxValue = edge[2]['weight']
-        # check if we have already scanned the source node
-        if sid not in nodes.keys():
-            # it's an unscanned new node, is it in the database?
-            presentNode = localSession.query(node).filter_by(name=sid).first()
-            if not presentNode:
-                # not in the db, create new node
-                tmps = node(name=sid)
-                nodes[sid] = tmps 
+        if checkPresence == False:
+            # check if we have already scanned the source node, this doesn
+            # take into account the scan-id
+            if sid not in nodes.keys():
+                # it's an unscanned new node, is it in the database?
+                presentNode = localSession.query(node).filter_by(name=sid).\
+                        first()
+                if not presentNode:
+                    # not in the db, create new node
+                    sname = graph.node[sid]['name']
+                    tmps = node(Id=sid, scan_Id_r=scanId, name=sname)
+                    nodes[sid] = tmps 
+                else:
+                    nodes[sid] = presentNode
+                    tmps = nodes[sid]
             else:
-                nodes[sid] = presentNode
+                # yes we scanned it
                 tmps = nodes[sid]
-        else:
-            # yes we scanned it
-            tmps = nodes[sid]
 
-        if did not in nodes.keys():
-            presentNode = localSession.query(node).filter_by(name=did).first()
-            if not presentNode:
-                # not in the db, create new node
-                tmpd = node(name=did)
-                nodes[did] = tmpd 
+            if did not in nodes.keys():
+                presentNode = localSession.query(node).filter_by(name=did).\
+                        first()
+                if not presentNode:
+                    # not in the db, create new node
+                    dname = graph.node[sid]['name']
+                    tmpd = node(Id=did, scan_Id_r=scanId, name=dname)
+                    nodes[did] = tmpd 
+                else:
+                    nodes[did] = presentNode
+                    tmpd = nodes[sid]
             else:
-                nodes[did] = presentNode
-                tmpd = nodes[sid]
+                # yes we scanned it
+                tmpd = nodes[did]
         else:
-            # yes we scanned it
-            tmpd = nodes[did]
+            dname = graph.node[sid]['name']
+            tmpd = node(Id=did, scan_Id_r=scanId, name=dname)
+            sname = graph.node[sid]['name']
+            tmps = node(Id=sid, scan_Id_r=scanId, name=sname)
 
         newLink = link(from_node_r=tmps, to_node_r=tmpd, scan_Id_r=scanId)
         newEtx = etx(link_r=newLink, etx_value=etxValue)
