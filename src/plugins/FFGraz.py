@@ -104,7 +104,7 @@ class FFGraz(plugin):
         self.localSession.add(newFile)
         addGraphToDB(simpleG, self.localSession, newScan)
         f.close()
-        os.remove(f[0])
+        os.remove(topoFile[0])
     
     def aggregateNodesByName(self, graph):
         """ this function takes a graph with node names of the kind x.y.z and
