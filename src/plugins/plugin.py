@@ -34,16 +34,16 @@ class plugin(Thread):
             logLevel = parser.get(pluginName, 'loglevel')
             if logLevel == "DEBUG":
                 returnLevel = logging.DEBUG
-            if logLevel == "INFO":
+            elif logLevel == "INFO":
                 returnLevel = logging.INFO
-            if logLevel == "WARNING":
+            elif logLevel == "WARNING":
                 returnLevel = logging.WARNING
-            if logLevel == "ERROR":
+            elif logLevel == "ERROR":
                 returnLevel = logging.ERROR
-            if logLevel == "CRITICAL":
+            elif logLevel == "CRITICAL":
                 returnLevel = logging.CRITICAL
             else:
-                logger.error("logLevel from config file unknown,"+\
+                self.logger.error("logLevel from config file unknown,"+\
                         "switching to INFO")
                 returnLevel = logging.INFO
         except:
