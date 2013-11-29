@@ -190,8 +190,6 @@ class FFGraz(plugin):
         html = page.read()
         soup = BeautifulSoup(html)
         table = soup.find('table')
-        #FIXME we need a logging system here, and to handle return parameters on
-        # errors
         if len(table) == 0:
             self.logger.error("No table found in "+url)
             return None, None
