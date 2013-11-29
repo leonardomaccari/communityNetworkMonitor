@@ -1,13 +1,14 @@
-#!/usr/bin/python
-
-from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy.orm import relationship, sessionmaker, scoped_session
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, ForeignKey, Integer, String, DateTime, Float
-from sqlalchemy import create_engine, desc
+from sqlalchemy import Column, ForeignKey, Integer
+from sqlalchemy import String, DateTime, Float, Boolean
+from sqlalchemy import create_engine, and_, desc
 from datetime import datetime
 from random import random
 
 Base = declarative_base()
+
+# objects representing the local database 
 
 class scan(Base):
     __tablename__ = 'scan'
@@ -25,12 +26,27 @@ class topo_file(Base):
 
 class node(Base):
     __tablename__ = 'node'
+    Id = Column(String(50), primary_key=True)
+    scan_Id = Column(Integer, ForeignKey('scan.Id'), primary_key=True)
+    name = Column(String(50))
+    scan_Id_r = relationship(scan)
+
+class network(Base):
+    __tablename__ = 'network'
     Id = Column(Integer, primary_key=True)
     name = Column(String(50))
-    links_outgoing = relationship("link", order_by="link.Id", 
-            primaryjoin = "link.from_node_Id == node.Id")
-    links_ingoing = relationship("link", order_by="link.Id", 
-            primaryjoin = "link.to_node_Id == node.Id")
+    description = Column(String(100))
+
+class IPv4Address(Base):
+    __tablename__ = 'ip_address'
+    IPv4 = Column(String(15), primary_key=True)
+    netmask = Column(String(2), primary_key=True)
+    #TODO HNA is unused so far
+    HNA = Column(Boolean())
+    gateway = Column(Boolean())
+    network_Id = Column(Integer)
+    node_Id = Column(Integer, ForeignKey('node.Id'))
+    node_Id_r = relationship(node)
 
 class link(Base):
     __tablename__ = 'link'
@@ -56,41 +72,22 @@ class etx(Base):
     etx_value = Column(Float)
     link_r = relationship(link)
 
-def addTestScan(session, numNodes, randomize):
-    newscan = scan()
-    session.add(newscan)
-    for i in range(numNodes):
-        session.merge(node(name="test-node-"+str(i)))
-    if randomize:
-        ip = int((256-numNodes)*random())
-        session.merge(node("test-node-" + str(numNodes+ip)))
-    nodes = session.query(node)
-    for i in range(numNodes):
-        l = session.merge(link(scan_Id_r = newscan, multi_link_number=0,
-            from_node_r = nodes[i], to_node_r = nodes[(i+1)%numNodes]))
-        session.merge(etx(etx_value=1+random(), link_r=l))
-    if randomize:
-        r1 = int(random()*numNodes)
-        r2 = int(random()*numNodes)
-        l = session.merge(link(scan_Id_r = newscan, multi_link_number=0,
-            from_node_r = nodes[r1], to_node_r = nodes[r2]))
-        session.merge(etx(etx_value=1+random(), link_r=l))
-    session.commit()
-
-
 def addGraphToDB(graph, localSession, scanId):
+    """ transforms a nx graph in db entries """
+
     nodes = {}
     for edge in graph.edges(data=True):
         sid = edge[0]
         did = edge[1]
         etxValue = edge[2]['weight']
-        # check if we have already scanned the source node
         if sid not in nodes.keys():
             # it's an unscanned new node, is it in the database?
-            presentNode = localSession.query(node).filter_by(name=sid).first()
+            presentNode = localSession.query(node).filter(\
+                    and_(node.Id==sid, node.scan_Id==scanId.Id)).first()
             if not presentNode:
                 # not in the db, create new node
-                tmps = node(name=sid)
+                sname = graph.node[sid]['name']
+                tmps = node(Id=sid, scan_Id_r=scanId, name=sname)
                 nodes[sid] = tmps 
             else:
                 nodes[sid] = presentNode
@@ -100,10 +97,12 @@ def addGraphToDB(graph, localSession, scanId):
             tmps = nodes[sid]
 
         if did not in nodes.keys():
-            presentNode = localSession.query(node).filter_by(name=did).first()
+            presentNode = localSession.query(node).filter(\
+                    and_(node.Id==did, node.scan_Id==scanId.Id)).first()
             if not presentNode:
                 # not in the db, create new node
-                tmpd = node(name=did)
+                dname = graph.node[did]['name']
+                tmpd = node(Id=did, scan_Id_r=scanId, name=dname)
                 nodes[did] = tmpd 
             else:
                 nodes[did] = presentNode
@@ -111,12 +110,9 @@ def addGraphToDB(graph, localSession, scanId):
         else:
             # yes we scanned it
             tmpd = nodes[did]
-
         newLink = link(from_node_r=tmps, to_node_r=tmpd, scan_Id_r=scanId)
         newEtx = etx(link_r=newLink, etx_value=etxValue)
-        localSession.add(newLink)
         localSession.add(newEtx)
-    localSession.commit()
     #FIXME should return something here
 
 def initializeDB(parser):
@@ -124,7 +120,7 @@ def initializeDB(parser):
     database =  parser.get('main', 'localdb')
     engine = create_engine(database)
     Base.metadata.create_all(engine)
-    DBSession = sessionmaker(bind=engine)
-    localSession = DBSession()
+    sessionFactory = sessionmaker(bind=engine, autocommit=True)
+    localSession = scoped_session(sessionFactory)
     return localSession
 
