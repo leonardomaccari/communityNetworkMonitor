@@ -13,7 +13,7 @@ Base = declarative_base()
 class scan(Base):
     __tablename__ = 'scan'
     Id = Column(Integer, primary_key=True)
-    time = Column(DateTime, default=datetime.utcnow)
+    time = Column(DateTime, default=datetime.now)
     scan_type = Column(String(10), default="ETX")
     network = Column(String(10), default="NINUX")
 
@@ -39,14 +39,15 @@ class network(Base):
 
 class IPv4Address(Base):
     __tablename__ = 'ip_address'
+    #TODO HNA and netmask is unused so far
     IPv4 = Column(String(15), primary_key=True)
     netmask = Column(String(2), primary_key=True)
-    #TODO HNA is unused so far
     HNA = Column(Boolean())
+    network_Id = Column(Integer, ForeignKey('network.Id'), primary_key=True)
     gateway = Column(Boolean())
-    network_Id = Column(Integer)
     node_Id = Column(Integer, ForeignKey('node.Id'))
     node_Id_r = relationship(node)
+    network_Id_r = relationship(network)
 
 class link(Base):
     __tablename__ = 'link'
