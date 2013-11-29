@@ -14,8 +14,13 @@ class plugin(Thread):
         print >> sys.stderr, "Error, you should not call init in the plugin class"
         sys.exit(1)
     
-    def baseInitialize(self, parser,  name):
+    def baseInitialize(self, parser,  name, lc):
         """ initialize some shared parameters, do some error check """
+
+        # REMINDER: do not access the db in this function, each plugin is a 
+        # thread with a localSession that is separated when they become
+        # a thread. Here there is no thread so the scoped_session does
+        # not differentiate between sessions. And havoc occurs.
         self.logger = logging.getLogger("plugin base")
         self.logger.setLevel(logging.INFO)
         pluginName = os.path.splitext(os.path.basename(name))[0]
@@ -50,6 +55,21 @@ class plugin(Thread):
             returnLevel = logging.INFO
         return enabled, returnLevel, pluginName
 
+    def addNetwork(self):
+        if self.enabled:
+            networkRow = self.localSession.query(network).\
+                    filter_by(name=self.pluginName).first()
+            if networkRow == None:
+                try:
+                    d = self.parser.get(self.pluginName, 'description')
+                except:
+                    d = ''
+                newNetwork = network(name=self.pluginName, description=d)
+                self.localSession.add(newNetwork)
+                self.logger.info("Adding new network %s to the DB",
+                        self.pluginName)
+
+
     def convertTime(self, s):
         """ simply convert a string of the format 1s/m/h/d to the equivalent
         in seconds """
@@ -68,6 +88,7 @@ class plugin(Thread):
 
     def run(self):
         #self.localSession = self.localSession()
+        self.addNetwork()
         while not self.exitAll:
             self.getStats()
             for i in range(self.period):

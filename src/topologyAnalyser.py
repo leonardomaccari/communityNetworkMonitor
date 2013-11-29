@@ -153,10 +153,10 @@ if __name__ == '__main__':
         logger.addHandler(sHandler)
 
 
-    ffg = FFGraz()
-    ffg.initialize(parser, localSession)
     nnx = ninux()
     nnx.initialize(parser, localSession)
+    ffg = FFGraz()
+    ffg.initialize(parser, localSession)
     
     threadList.append(nnx)
     threadList.append(ffg)

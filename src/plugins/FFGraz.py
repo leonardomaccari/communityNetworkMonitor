@@ -23,9 +23,10 @@ class FFGraz(plugin):
 
     def initialize(self, parser, lc):
         self.localSession = lc
+        self.parser = parser
         self.url=parser.get('FFGraz', 'baseTopoURL')
         self.enabled, logLevel, self.pluginName = plugin.baseInitialize(self, 
-                parser, __file__)
+                parser, __file__, lc)
         self.logger = logging.getLogger(self.pluginName)
         self.logger.setLevel(logLevel)
         try:

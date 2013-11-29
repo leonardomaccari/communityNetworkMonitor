@@ -16,7 +16,7 @@ class ninux(plugin):
         self.localSession = lc
         self.parser = parser
         self.enabled, logLevel, self.pluginName = plugin.baseInitialize(self, 
-                parser, __file__)
+                parser, __file__, lc)
         self.logger = logging.getLogger(self.pluginName)
         self.logger.setLevel(logLevel)
         try:
@@ -51,10 +51,11 @@ class ninux(plugin):
         dnode.id as did, dnode.name as dname, link.etx as etx_v
         from nodeshot_node as snode join nodeshot_device as sdev join
         nodeshot_interface as sifc join nodeshot_link as link join
-        nodeshot_interface as difc join nodeshot_device as ddev join nodeshot_node
-        as dnode where snode.id = sdev.node_id and sdev.id = sifc.device_id and
-        sifc.id = link.from_interface_id and difc.id = link.to_interface_id and
-        difc.device_id = ddev.id and ddev.node_id = dnode.id"""
+        nodeshot_interface as difc join nodeshot_device as ddev join
+        nodeshot_node as dnode where snode.id = sdev.node_id and sdev.id
+        = sifc.device_id and sifc.id = link.from_interface_id and
+        difc.id = link.to_interface_id and difc.device_id = ddev.id and
+        ddev.node_id = dnode.id"""
     
         q = session.query("sid", "sname", "did", "dname", "etx_v").\
             from_statement(etxQuery)
@@ -77,16 +78,8 @@ class ninux(plugin):
             # encodings, guess the encoding and convert
             sname = sn.decode(chardet.detect(sn)['encoding'])
             dname = dn.decode(chardet.detect(dn)['encoding'])
-            try:
-                #code.interact(local=locals())
-                g.add_node(sid,
-                        name=sname)
-                #        name=sname.encode('utf-8').decode('utf-8'))
-                g.add_node(did,
-                        name=dname)
-                #    name=dname.encode('utf-8').decode('utf-8'))
-                g.add_edge(sid,did,weight=etxValue)
-            except  SQLAlchemyError as e:
-                self.logger.error("could not write to local db: "+e.message)
+            g.add_node(sid, name=sname)
+            g.add_node(did, name=dname)
+            g.add_edge(sid,did,weight=etxValue)
         addGraphToDB(g, self.localSession, newScan)
 

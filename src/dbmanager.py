@@ -1,7 +1,8 @@
 from sqlalchemy.orm import relationship, sessionmaker, scoped_session
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, ForeignKey, Integer, String, DateTime, Float
-from sqlalchemy import create_engine, desc
+from sqlalchemy import Column, ForeignKey, Integer
+from sqlalchemy import String, DateTime, Float, Boolean
+from sqlalchemy import create_engine, and_, desc
 from datetime import datetime
 from random import random
 
@@ -34,7 +35,18 @@ class network(Base):
     __tablename__ = 'network'
     Id = Column(Integer, primary_key=True)
     name = Column(String(50))
-    desc = Column(String(100))
+    description = Column(String(100))
+
+class IPv4Address(Base):
+    __tablename__ = 'ip_address'
+    IPv4 = Column(String(15), primary_key=True)
+    netmask = Column(String(2), primary_key=True)
+    #TODO HNA is unused so far
+    HNA = Column(Boolean())
+    gateway = Column(Boolean())
+    network_Id = Column(Integer)
+    node_Id = Column(Integer, ForeignKey('node.Id'))
+    node_Id_r = relationship(node)
 
 class link(Base):
     __tablename__ = 'link'
@@ -60,7 +72,7 @@ class etx(Base):
     etx_value = Column(Float)
     link_r = relationship(link)
 
-def addGraphToDB(graph, localSession, scanId, checkPresence=False):
+def addGraphToDB(graph, localSession, scanId):
     """ transforms a nx graph in db entries """
 
     nodes = {}
@@ -68,48 +80,38 @@ def addGraphToDB(graph, localSession, scanId, checkPresence=False):
         sid = edge[0]
         did = edge[1]
         etxValue = edge[2]['weight']
-        if checkPresence == False:
-            # check if we have already scanned the source node, this doesn
-            # take into account the scan-id
-            if sid not in nodes.keys():
-                # it's an unscanned new node, is it in the database?
-                presentNode = localSession.query(node).filter_by(name=sid).\
-                        first()
-                if not presentNode:
-                    # not in the db, create new node
-                    sname = graph.node[sid]['name']
-                    tmps = node(Id=sid, scan_Id_r=scanId, name=sname)
-                    nodes[sid] = tmps 
-                else:
-                    nodes[sid] = presentNode
-                    tmps = nodes[sid]
+        if sid not in nodes.keys():
+            # it's an unscanned new node, is it in the database?
+            presentNode = localSession.query(node).filter(\
+                    and_(node.Id==sid, node.scan_Id==scanId.Id)).first()
+            if not presentNode:
+                # not in the db, create new node
+                sname = graph.node[sid]['name']
+                tmps = node(Id=sid, scan_Id_r=scanId, name=sname)
+                nodes[sid] = tmps 
             else:
-                # yes we scanned it
+                nodes[sid] = presentNode
                 tmps = nodes[sid]
-
-            if did not in nodes.keys():
-                presentNode = localSession.query(node).filter_by(name=did).\
-                        first()
-                if not presentNode:
-                    # not in the db, create new node
-                    dname = graph.node[sid]['name']
-                    tmpd = node(Id=did, scan_Id_r=scanId, name=dname)
-                    nodes[did] = tmpd 
-                else:
-                    nodes[did] = presentNode
-                    tmpd = nodes[sid]
-            else:
-                # yes we scanned it
-                tmpd = nodes[did]
         else:
-            dname = graph.node[sid]['name']
-            tmpd = node(Id=did, scan_Id_r=scanId, name=dname)
-            sname = graph.node[sid]['name']
-            tmps = node(Id=sid, scan_Id_r=scanId, name=sname)
+            # yes we scanned it
+            tmps = nodes[sid]
 
+        if did not in nodes.keys():
+            presentNode = localSession.query(node).filter(\
+                    and_(node.Id==did, node.scan_Id==scanId.Id)).first()
+            if not presentNode:
+                # not in the db, create new node
+                dname = graph.node[did]['name']
+                tmpd = node(Id=did, scan_Id_r=scanId, name=dname)
+                nodes[did] = tmpd 
+            else:
+                nodes[did] = presentNode
+                tmpd = nodes[sid]
+        else:
+            # yes we scanned it
+            tmpd = nodes[did]
         newLink = link(from_node_r=tmps, to_node_r=tmpd, scan_Id_r=scanId)
         newEtx = etx(link_r=newLink, etx_value=etxValue)
-        localSession.add(newLink)
         localSession.add(newEtx)
     #FIXME should return something here
 
