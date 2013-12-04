@@ -16,6 +16,7 @@ list of files, commented:
 └── src
     ├── dbmanager.py # libs for the local database
     ├── plugins # plugins for each community network
+    │   ├── FFWien.py # FunkFeuer Wien plugin
     │   ├── FFGraz.py # FunkFeuer Graz plugin
     │   ├── __init__.py
     │   ├── ninux.py # ninux plugin
@@ -54,3 +55,51 @@ period = 10m     # activation-period (to call the getStats() of the plugin)
 
 baseTopoURL = http://stats.ffgraz.net/topo/DOTARCHIV/
 
+
+========== Plugins documentation
+
+== FFWien
+
+This plugin downloads the topology of FFWien from a base url where the
+OLSR dump is saved in stats.funkfeuer.at. Since I want to aggregate
+links that belong to the same physical installation (~wired) I also get
+the association between a physical node and all its IPs from the JSON
+interface. This second operation takes a long time, so I do it with a
+different period. The info extracted from the JSON is saved in the local
+DB. Roughly, the procedure is as follows:
+
+1) get list of wireless interfaces from
+https://ff-nodedb.funkfeuer.at//api/FFM-Wireless_Interface
+2) get each interface, get "attributes":pid (IFACEPID).
+for each nterface get ipv4 network links from
+/api/FFM-Wireless_Interface/**IFACEID**/ip4_network_links"
+and the field "attributes":"left":"url"  
+
+3a) For each network_link get the list of all the entries:
+"entries": [
+"/api/FFM-Wireless_Interface_in_IP4_Network/2568",
+...
+]
+4a) for each entry, get the entry and get from the entry:
+"attributes":"right":"url" 
+5a) from the IP4_network get
+"attributes": "net address" (IP address)
+
+3b) for the net-device get "attributes":"node":pid
+ 
+This procedure stores enough information in the DB to be able to build a
+map IP address -> Node ID
+
+4) make a graph with the OLSR map and substitute each IP with 
+   the corresponding nodepid. (CHECK that each IP gets a node)
+
+== FFGraz
+
+Here I get a .dot file that is published at a specified url every 10
+minutes. The naming scheme adopted by FFGraz is interface.device.node,
+so the .dot file is of the kind:
+
+if0.dev0.node0 -> if1.dev0.node1
+
+The plugin parses the names and aggregates interfaces/devices belonging
+to the same node.

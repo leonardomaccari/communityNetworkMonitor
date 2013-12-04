@@ -52,7 +52,7 @@ class FFGraz(plugin):
         else:
             lastDate = lastDateFromDB[0].time
     
-        newScan = scan(network="FFGRAZ")
+        newScan = scan(network=self.pluginName)
     
         fileName = None
         newDate = None

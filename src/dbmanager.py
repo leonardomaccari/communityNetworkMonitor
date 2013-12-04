@@ -19,9 +19,9 @@ class scan(Base):
 
 class topo_file(Base):
     __tablename__= 'topo_file'
-    file_url = Column(String(300), primary_key=True)
+    scan_Id = Column(Integer, ForeignKey("scan.Id"), primary_key=True)
     time = Column(DateTime)
-    scan_Id = Column(Integer, ForeignKey("scan.Id"))
+    file_url = Column(String(300))
     scan_Id_r = relationship(scan)
 
 class node(Base):
@@ -42,19 +42,21 @@ class IPv4Address(Base):
     #TODO HNA and netmask is unused so far
     IPv4 = Column(String(15), primary_key=True)
     netmask = Column(String(2), primary_key=True)
-    HNA = Column(Boolean())
     network_Id = Column(Integer, ForeignKey('network.Id'), primary_key=True)
-    gateway = Column(Boolean())
+    iface_type = Column(String(4), default="WLAN")
     node_Id = Column(Integer, ForeignKey('node.Id'))
-    node_Id_r = relationship(node)
+    HNA = Column(Boolean())
+    gateway = Column(Boolean())
     network_Id_r = relationship(network)
+    # FIXME cascade == none, see fixme on FFWIEN
+    node_Id_r = relationship(node, cascade='none')
 
 class link(Base):
     __tablename__ = 'link'
     Id = Column(Integer,primary_key=True)
     # two nodes may have more than one link 
     multi_link_number = Column(Integer, default=0)
-    link_type = Column(String(10), default="WIRELESS") 
+    link_type = Column(String(10), default="WLAN") 
 
     from_node_Id = Column(Integer, ForeignKey("node.Id"))
     from_node_r = relationship(node, 
@@ -111,7 +113,8 @@ def addGraphToDB(graph, localSession, scanId):
         else:
             # yes we scanned it
             tmpd = nodes[did]
-        newLink = link(from_node_r=tmps, to_node_r=tmpd, scan_Id_r=scanId)
+        newLink = link(from_node_r=tmps, to_node_r=tmpd, 
+                scan_Id_r=scanId, link_type=edge[2]['link_type'])
         newEtx = etx(link_r=newLink, etx_value=etxValue)
         localSession.add(newEtx)
     #FIXME should return something here
