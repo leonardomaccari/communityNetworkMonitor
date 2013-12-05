@@ -33,7 +33,7 @@ class FFWien(plugin):
         self.debug = False # just a shortcut
         self.enabled, logLevel, self.pluginName = plugin.baseInitialize(self, 
                 parser, __file__, lc)
-        if logLevel < logger.INFO:
+        if logLevel < logging.INFO:
             self.debug = True
         self.logger = logging.getLogger(self.pluginName)
         self.logger.setLevel(logLevel)
