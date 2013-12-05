@@ -28,7 +28,6 @@ class FFWien(plugin):
         Thread.__init__(self)
 
     def initialize(self, parser, lc):
-        #FIXME remove the logs from requests library!
         self.localSession = lc
         self.parser = parser
         # FIXME extend this debug to all the plugins
@@ -394,10 +393,9 @@ class FFWien(plugin):
     
     def getStats(self):
         
-        #logging.disable("requests")
-        #reqL = logging.getLogger("requests")
-        ##reqL.disable()
-
+        reqL = logging.getLogger("urllib3.connectionpool")
+        reqL.setLevel(logging.ERROR)
+        
         lastScan = self.checkJSONDump() 
         if lastScan == None:
             self.logger.info('Re-building IP mapping from JSON')
