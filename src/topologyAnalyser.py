@@ -31,7 +31,7 @@ def parseArgs():
     """ argument parser."""
     C = configuration()
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "dv:")
+        opts, args = getopt.getopt(sys.argv[1:], "dv:h")
     except getopt.GetoptError, err:
         # print help information and exit:
         print >> sys.stderr,  str(err)
@@ -76,6 +76,7 @@ class configuration():
     optionalParamsNames = {
             "-d":["daemonMode", False, False, "go to background, do not write to stdout", str],
             "-v":["verbosity", True, 1, "verbosity level 0-2", int],
+            "-h":["help", False, False, "show the help", int],
             }
     defaultValue = False
     neededParams = {}
@@ -89,6 +90,8 @@ class configuration():
 
     def checkCorrectnes(self):
         # do some errorchecking here
+        if self.getParam("help") == True:
+            return False
         return True
     def printUsage(self):
         print >> sys.stderr
@@ -167,6 +170,12 @@ if __name__ == '__main__':
         logger.setLevel(logging.DEBUG)
 
     # TODO automic handling of plugins based on files
+
+    # TODO add a runlevel to initialize(). Use runlevel 0 to
+    # only return a list of valid configuration parameters
+    # then add them to the CL argument parsing in order to override 
+    # config files
+
     nnx = ninux()
     nnx.initialize(parser, localSession)
     ffg = FFGraz()
