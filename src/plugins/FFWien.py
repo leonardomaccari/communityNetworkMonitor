@@ -428,8 +428,9 @@ class FFWien(plugin):
     
     def getStats(self):
         
-        reqL = logging.getLogger("urllib3.connectionpool")
-        reqL.setLevel(logging.ERROR)
+        for name,lg in logging.Logger.manager.loggerDict.items():
+            if "urllib" in name:
+                lg.setLevel(logging.ERROR)
         
         lastScan = self.checkJSONDump() 
         if lastScan == None:
