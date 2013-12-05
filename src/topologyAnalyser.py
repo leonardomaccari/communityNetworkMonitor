@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+#FIXME add copyright notice to every file
+
 from ConfigParser import SafeConfigParser
 from glob import glob
 import sys

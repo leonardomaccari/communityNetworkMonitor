@@ -3,6 +3,8 @@ This is a python daemon that periodically fetches information from a few
 community networks, saves historical series in a local sqlite file 
 and analyses their topology features.
 
+Copyright is of Leonardo Maccari (leonardo.maccari@unitn.it) and the
+code is released under GPLv3 license.
 
 ================ Install & Usage
 
