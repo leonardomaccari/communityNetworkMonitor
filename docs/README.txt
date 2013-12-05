@@ -3,6 +3,47 @@ This is a python daemon that periodically fetches information from a few
 community networks, saves historical series in a local sqlite file 
 and analyses their topology features.
 
+
+================ Install & Usage
+
+You will need to install some python modules:
+ - requests
+ - sqlalchemy
+ - networkx
+ - mechanize
+ - beautifulsoup
+ - simplejson
+ - python-mysqldb (for ninux plugin, or if you want to use any other DB
+   that is not sqlite)
+
+
+run ./src/topologyAnalyser.py, if you have other errors for mising modules
+you may need to install more python packages.
+
+Once you satisfied the dependencies, look into the conf/main.conf file
+and choose your local database type. sqlite is the easisest option (see
+below for details).
+
+The few options are self-esplicative, run with -h for a list.  Once
+started, the program will run until you kill it and will save the
+information it fetches in the local database. For each scan you will
+have a new entry in the "scan" table, a new set of nodes links and of
+etx values in the respective tables. Then you can get the information
+you need with SQL. For instance, if you want to have a table with
+"nodeId, nodeId, etx" for each link, for the FFWien network just for the
+last scan, you can use a query like:
+
+
+
+SELECT snode.Id, dnode.Id, etx.etx_value FROM link, scan, node AS snode,
+node AS dnode, etx WHERE link.scan_Id = scan.Id AND snode.Id =
+link.from_node_Id AND dnode.Id = link.to_node_Id AND etx.link_Id =
+link.Id AND dnode.scan_Id = scan.Id AND snode.scan_Id = scan.Id AND
+scan.Id IN (SELECT Id FROM scan WHERE network="FFWien" ORDER BY time
+DESC LIMIT 1);
+
+===================== Configurations & internals
+
 list of files, commented:
 
 ├── conf # configuration files, 
@@ -103,3 +144,61 @@ if0.dev0.node0 -> if1.dev0.node1
 
 The plugin parses the names and aggregates interfaces/devices belonging
 to the same node.
+
+
+
+============ FAQs ================
+
+1) I get this error:
+
+ sqlalchemy.exc.OperationalError: (OperationalError) unable to open
+ database file None None
+
+you probably did not set the localdb variable in the main.conf file to a
+valid (existent) place
+
+2) I get thousands of these messages:
+
+requests.packages.urllib3.connectionpool: INFO, Starting new HTTPS connection (1): ff-nodedb.funkfeuer.at
+
+the requests module is used in the FFWien plugin ans by default logs
+everything it does, you have to disable it. The only way I found is with
+the lines in getStats() that do:
+
+  reqL = logging.getLogger("urllib3.connectionpool")
+  reqL.setLevel(logging.ERROR)
+
+if you see the messages it means that your systems names the module in a
+different way, you just need to modify urllib3.connectionpool with what
+your system uses, that is in the first part of the message
+
+
+================= known bugs
+
+When exiting, in some systems you get an error (should have no
+consequences):
+
+Exception in thread Thread-3 (most likely raised during interpreter
+shutdown):
+Traceback (most recent call last):
+  File "/usr/lib/python2.6/threading.py", line 532, in __bootstrap_inner
+  File "/home/maccari/src/cn/src/plugins/plugin.py", line 94, in run
+  File "/home/maccari/src/cn/src/plugins/FFWien.py", line 438, in
+getStats
+  File "/home/maccari/src/cn/src/plugins/FFWien.py", line 130, in
+getJSONDump
+  File "/home/maccari/src/cn/src/plugins/FFWien.py", line 207, in
+getURLWrapper
+  File "/usr/local/lib/python2.6/dist-packages/requests/api.py", line
+55, in get
+  File "/usr/local/lib/python2.6/dist-packages/requests/api.py", line
+44, in request
+  File "/usr/local/lib/python2.6/dist-packages/requests/sessions.py",
+line 361, in request
+  File "/usr/local/lib/python2.6/dist-packages/requests/sessions.py",
+line 464, in send
+  File "/usr/local/lib/python2.6/dist-packages/requests/adapters.py",
+line 352, in send
+<type 'exceptions.AttributeError'>: 'NoneType' object has no attribute
+'error'
+
