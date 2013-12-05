@@ -3,8 +3,10 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, ForeignKey, Integer
 from sqlalchemy import String, DateTime, Float, Boolean
 from sqlalchemy import create_engine, and_, desc
+from sqlalchemy.exc import OperationalError
 from datetime import datetime
 from random import random
+import sys
 
 Base = declarative_base()
 
@@ -133,9 +135,15 @@ def addGraphToDB(graph, localSession, scanId):
 def initializeDB(parser):
     #FIXME should catch errors here, do not put a default 
     # in the sqlite database? or add testdb to the git repo
-    database =  parser.get('main', 'localdb')
-    engine = create_engine(database)
-    Base.metadata.create_all(engine)
+    try:
+        database =  parser.get('main', 'localdb')
+        engine = create_engine(database)
+        Base.metadata.create_all(engine)
+    except OperationalError:
+        print "ERROR: Could not open the local database. This may be to wrong"
+        print "mySQL credentials or non-existent sqlite folder."
+        print "Please check your configuration"
+        sys.exit(1)
     sessionFactory = sessionmaker(bind=engine, autocommit=True)
     localSession = scoped_session(sessionFactory)
     return localSession
