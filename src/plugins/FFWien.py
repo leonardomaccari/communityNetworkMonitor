@@ -30,10 +30,11 @@ class FFWien(plugin):
     def initialize(self, parser, lc):
         self.localSession = lc
         self.parser = parser
-        # FIXME extend this debug to all the plugins
-        self.debug = True
+        self.debug = False # just a shortcut
         self.enabled, logLevel, self.pluginName = plugin.baseInitialize(self, 
                 parser, __file__, lc)
+        if logLevel < logger.INFO:
+            self.debug = True
         self.logger = logging.getLogger(self.pluginName)
         self.logger.setLevel(logLevel)
         try:
