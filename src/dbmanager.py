@@ -93,7 +93,9 @@ def addGraphToDB(graph, localSession, scanId):
                     and_(node.Id==sid, node.scan_Id==scanId.Id)).first()
             if not presentNode:
                 # not in the db, create new node
-                sname = graph.node[sid]['name']
+                sname = ""
+                if 'name' in graph.node[sid]:
+                    sname = graph.node[sid]['name']
                 tmps = node(Id=sid, scan_Id_r=scanId, name=sname)
                 nodes[sid] = tmps 
             else:
@@ -108,7 +110,9 @@ def addGraphToDB(graph, localSession, scanId):
                     and_(node.Id==did, node.scan_Id==scanId.Id)).first()
             if not presentNode:
                 # not in the db, create new node
-                dname = graph.node[did]['name']
+                dname = ""
+                if 'name' in graph.node[did]:
+                    dname = graph.node[did]['name']
                 tmpd = node(Id=did, scan_Id_r=scanId, name=dname)
                 nodes[did] = tmpd 
             else:

@@ -64,8 +64,6 @@ class FFWien(plugin):
 
     def getJSONDump(self):
         """ get a new dump of the JSON and store it in the database """
-        #FIXME this should be done in a separte thread, or the getNewTopology
-        # should get not only one topology
 
         wirelessInterfacesURL = self.baseJSONURL+\
                 "/api/FFM-Wireless_Interface"
@@ -149,7 +147,7 @@ class FFWien(plugin):
                 if presentNode:
                     newNode = presentNode
                 else:
-                    # FIXME I didn't find a way to avoid this query
+                    # TODO I didn't find a way to avoid this query
                     # merge() should be taking care of avoiding 
                     # double inserts, but I can't make it work
                     newNode = node(Id=nodePid, name=nodeName, owner=nodeOwner,
@@ -242,7 +240,10 @@ class FFWien(plugin):
         returnLinks = []
 
         for l in link[::-1]:
-            date = datetime.strptime(l.string, "topo-%Y-%m-%d-%H:%M.tsv.gz")
+            try:
+                date = datetime.strptime(l.string, "topo-%Y-%m-%d-%H:%M.tsv.gz")
+            except ValueError:
+                continue
             if date > lastDate:
                 returnLinks.append(url+l.string)
             else:
@@ -315,17 +316,14 @@ class FFWien(plugin):
                 numUnknown[ips] = ""
                 continue
             else:
-                #FIXME name missing
-                G.add_node(self.IPAddressToNode[ips][0], name="")
+                G.add_node(self.IPAddressToNode[ips][0])
 
             if ipd not in self.IPAddressToNode:
-                #FIXME add to the info logs a summary of the dump (nodes/edges...)
                 self.logger.debug("Skipped node IP %s not in the DB",ipd)
                 numUnknown[ipd] = ""
                 continue
             else:
-                #FIXME name missing
-                G.add_node(self.IPAddressToNode[ipd][0], name="")
+                G.add_node(self.IPAddressToNode[ipd][0])
             src = self.IPAddressToNode[ips][0]
             dst = self.IPAddressToNode[ipd][0]
             srcType = self.IPAddressToNode[ips][1]
@@ -395,9 +393,12 @@ class FFWien(plugin):
                     else:
                         print "human error! human error!"
 
-            print "Nodes", len(self.nodeToIPAddress), numMixedNodes,\
-                    allWired, allWireless, len(numUnknown)
-            print "Links", numWired, numWireless, numMixed, numEtxOne, multiLinks, reverseLinks
+                    self.logger.debug("Nodes %d,%d,%d,%d,%d",
+                            len(self.nodeToIPAddress), numMixedNodes, allWired,
+                            allWireless, len(numUnknown))
+                    self.logger.debug("Links %d, %d, %d, %d, %d, %d, %d, %d",
+                            numWired, numWireless, numMixed, numEtxOne,
+                            multiLinks, reverseLinks)
 
             numLinks = 0
             numDoubleLinks = 0
@@ -410,10 +411,13 @@ class FFWien(plugin):
                     if s in graph[d]:
                         numReverseLinks += 1
                     
-            print "OLSR", numLinks, numDoubleLinks, numReverseLinks
+            self.logger.debug("OLSR %d, %d, %d", numLinks, 
+                    numDoubleLinks, numReverseLinks)
         addGraphToDB(G, self.localSession, newScan)
         olsrDump.close()
-        self.logger.info("Ok, completed the topology download")
+        self.logger.info("Ok, completed the topology download:"+\
+                "%d nodes, %d links, %d unknown", len(G.nodes()), 
+                len(G.edges()),len(numUnknown))
         os.remove(f[0])
     
     def getStats(self):
