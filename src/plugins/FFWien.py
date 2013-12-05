@@ -273,6 +273,11 @@ class FFWien(plugin):
         self.logger.info('Need to parse %d files', len(linkList))
         for fileLink in linkList:
             self.parseTopologyFile(fileLink)
+            if lastDateFromDB == None:
+                self.logger.info('breaking')
+                # if this is the first ETX scan, we may dowload hundreds of
+                # topologies. Avoid this, exit after the first one
+                break
 
     def parseTopologyFile(self, fileLink):
         """ download and parse the topology file """
