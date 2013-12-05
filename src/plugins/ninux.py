@@ -70,7 +70,7 @@ class ninux(plugin):
             self.logger.error("could not connect to ninux DB!")
             return 
 
-        newScan = scan(network="NINUX")
+        newScan = scan(network=self.pluginName)
         self.localSession.add(newScan)
         g = nx.Graph()
         for [sid, sn, did, dn, etxValue] in q:

@@ -8,10 +8,12 @@ import time
 import getopt
 import os
 import signal
+import requests
 
 import dbmanager
 from plugins.ninux import ninux 
 from plugins.FFGraz import FFGraz
+from plugins.FFWien import FFWien
 # import here future plugin code
 
 def getConfig():
@@ -125,6 +127,8 @@ if __name__ == '__main__':
     pluginConfigFiles, mainConfigFile, parser = getConfig()
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
+    
+
     sHandler = logging.StreamHandler()
     sHandler.setLevel(logging.INFO)
     fHandler = logging.FileHandler(parser.get('main', 'logfile'))
@@ -157,15 +161,19 @@ if __name__ == '__main__':
     nnx.initialize(parser, localSession)
     ffg = FFGraz()
     ffg.initialize(parser, localSession)
+    ffw = FFWien()
+    ffw.initialize(parser, localSession)
     
     threadList.append(nnx)
     threadList.append(ffg)
+    threadList.append(ffw)
 
     signal.signal(signal.SIGTERM, termHandler)
 
     try:
         for i in threadList:
             i.daemon = True
+            #FIXME run only the enabled ones
             i.start()
         while True:
             watchDog = 0

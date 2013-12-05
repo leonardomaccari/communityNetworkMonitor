@@ -13,15 +13,15 @@ Base = declarative_base()
 class scan(Base):
     __tablename__ = 'scan'
     Id = Column(Integer, primary_key=True)
-    time = Column(DateTime, default=datetime.utcnow)
+    time = Column(DateTime, default=datetime.now)
     scan_type = Column(String(10), default="ETX")
     network = Column(String(10), default="NINUX")
 
 class topo_file(Base):
     __tablename__= 'topo_file'
-    file_url = Column(String(300), primary_key=True)
+    scan_Id = Column(Integer, ForeignKey("scan.Id"), primary_key=True)
     time = Column(DateTime)
-    scan_Id = Column(Integer, ForeignKey("scan.Id"))
+    file_url = Column(String(300))
     scan_Id_r = relationship(scan)
 
 class node(Base):
@@ -29,6 +29,10 @@ class node(Base):
     Id = Column(String(50), primary_key=True)
     scan_Id = Column(Integer, ForeignKey('scan.Id'), primary_key=True)
     name = Column(String(50))
+    owner = Column(Integer)
+    manager = Column(Integer)
+    lat = Column(Float)
+    lon = Column(Float)
     scan_Id_r = relationship(scan)
 
 class network(Base):
@@ -39,21 +43,24 @@ class network(Base):
 
 class IPv4Address(Base):
     __tablename__ = 'ip_address'
+    #TODO HNA and netmask is unused so far
     IPv4 = Column(String(15), primary_key=True)
     netmask = Column(String(2), primary_key=True)
-    #TODO HNA is unused so far
+    network_Id = Column(Integer, ForeignKey('network.Id'), primary_key=True)
+    iface_type = Column(String(4), default="WLAN")
+    node_Id = Column(Integer, ForeignKey('node.Id'))
     HNA = Column(Boolean())
     gateway = Column(Boolean())
-    network_Id = Column(Integer)
-    node_Id = Column(Integer, ForeignKey('node.Id'))
-    node_Id_r = relationship(node)
+    network_Id_r = relationship(network)
+    # FIXME cascade == none, see fixme on FFWIEN
+    node_Id_r = relationship(node, cascade='none')
 
 class link(Base):
     __tablename__ = 'link'
     Id = Column(Integer,primary_key=True)
     # two nodes may have more than one link 
     multi_link_number = Column(Integer, default=0)
-    link_type = Column(String(10), default="WIRELESS") 
+    link_type = Column(String(10), default="WLAN") 
 
     from_node_Id = Column(Integer, ForeignKey("node.Id"))
     from_node_r = relationship(node, 
@@ -86,7 +93,9 @@ def addGraphToDB(graph, localSession, scanId):
                     and_(node.Id==sid, node.scan_Id==scanId.Id)).first()
             if not presentNode:
                 # not in the db, create new node
-                sname = graph.node[sid]['name']
+                sname = ""
+                if 'name' in graph.node[sid]:
+                    sname = graph.node[sid]['name']
                 tmps = node(Id=sid, scan_Id_r=scanId, name=sname)
                 nodes[sid] = tmps 
             else:
@@ -101,7 +110,9 @@ def addGraphToDB(graph, localSession, scanId):
                     and_(node.Id==did, node.scan_Id==scanId.Id)).first()
             if not presentNode:
                 # not in the db, create new node
-                dname = graph.node[did]['name']
+                dname = ""
+                if 'name' in graph.node[did]:
+                    dname = graph.node[did]['name']
                 tmpd = node(Id=did, scan_Id_r=scanId, name=dname)
                 nodes[did] = tmpd 
             else:
@@ -110,7 +121,8 @@ def addGraphToDB(graph, localSession, scanId):
         else:
             # yes we scanned it
             tmpd = nodes[did]
-        newLink = link(from_node_r=tmps, to_node_r=tmpd, scan_Id_r=scanId)
+        newLink = link(from_node_r=tmps, to_node_r=tmpd, 
+                scan_Id_r=scanId, link_type=edge[2]['link_type'])
         newEtx = etx(link_r=newLink, etx_value=etxValue)
         localSession.add(newEtx)
     #FIXME should return something here
