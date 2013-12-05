@@ -204,7 +204,7 @@ class FFWien(plugin):
     def getURLWrapper(self, url):
         """ Wrapper to catch exceptions when requesting a url """
         try:
-            ret = requests.get(url)
+            ret = requests.get(url, verify=False)
         except RequestException as e:
             self.logger.error('Could not get URL %s, \'%s\'', url, e.message)
             raise URLException
