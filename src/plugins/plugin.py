@@ -22,7 +22,6 @@ class plugin(Thread):
         # a thread. Here there is no thread so the scoped_session does
         # not differentiate between sessions. And havoc occurs.
         self.logger = logging.getLogger("plugin base")
-        self.logger.setLevel(logging.INFO)
         pluginName = os.path.splitext(os.path.basename(name))[0]
         if pluginName not in parser.sections():
             self.logger.error("Could not load config file for %s network,\
@@ -32,9 +31,11 @@ class plugin(Thread):
             en = parser.get(pluginName, 'enable')
             if en == 'False':
                 enabled = False
+                self.logger.info("Plugin %s disabled", pluginName)
         except:
             pass
 
+        returnLevel = logging.getLogger().level
         try:
             logLevel = parser.get(pluginName, 'loglevel')
             if logLevel == "DEBUG":
@@ -49,10 +50,10 @@ class plugin(Thread):
                 returnLevel = logging.CRITICAL
             else:
                 self.logger.error("logLevel from config file unknown,"+\
-                        "switching to INFO")
-                returnLevel = logging.INFO
+                        "switching to default")
         except:
-            returnLevel = logging.INFO
+            pass
+
         return enabled, returnLevel, pluginName
 
     def addNetwork(self):

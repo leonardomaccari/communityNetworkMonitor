@@ -230,13 +230,13 @@ class FFWien(plugin):
             if url == None:
                 url = "(empty url)"
             self.logger.error("Could not read url "+url)
-            return None, None
+            return []
         html = page.read()
         soup = BeautifulSoup(html)
         link = soup.findAll('a')
         if len(link) == 0:
             logger.error('No links in the page: %s', url)
-            return None, None
+            return []
         returnLinks = []
 
         for l in link[::-1]:

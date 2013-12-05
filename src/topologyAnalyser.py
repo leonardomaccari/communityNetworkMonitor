@@ -30,7 +30,7 @@ def parseArgs():
     """ argument parser."""
     C = configuration()
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "d")
+        opts, args = getopt.getopt(sys.argv[1:], "dv:")
     except getopt.GetoptError, err:
         # print help information and exit:
         print >> sys.stderr,  str(err)
@@ -74,6 +74,7 @@ class configuration():
     }
     optionalParamsNames = {
             "-d":["daemonMode", False, False, "go to background, do not write to stdout", str],
+            "-v":["verbosity", True, 1, "verbosity level 0-2", int],
             }
     defaultValue = False
     neededParams = {}
@@ -156,7 +157,15 @@ if __name__ == '__main__':
     else:
         logger.addHandler(sHandler)
 
+    vL = C.getParam("verbosity")
+    if vL == 0:
+        logger.setLevel(logging.ERROR)
+    elif vL == 1:
+        logger.setLevel(logging.INFO)
+    elif vL == 2:
+        logger.setLevel(logging.DEBUG)
 
+    # TODO automic handling of plugins based on files
     nnx = ninux()
     nnx.initialize(parser, localSession)
     ffg = FFGraz()
@@ -164,9 +173,12 @@ if __name__ == '__main__':
     ffw = FFWien()
     ffw.initialize(parser, localSession)
     
-    threadList.append(nnx)
-    threadList.append(ffg)
-    threadList.append(ffw)
+    if nnx.enabled:
+        threadList.append(nnx)
+    if ffg.enabled:
+        threadList.append(ffg)
+    if ffw.enabled:
+        threadList.append(ffw)
 
     signal.signal(signal.SIGTERM, termHandler)
 
