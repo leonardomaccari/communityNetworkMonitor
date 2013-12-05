@@ -29,6 +29,10 @@ class node(Base):
     Id = Column(String(50), primary_key=True)
     scan_Id = Column(Integer, ForeignKey('scan.Id'), primary_key=True)
     name = Column(String(50))
+    owner = Column(Integer)
+    manager = Column(Integer)
+    lat = Column(Float)
+    lon = Column(Float)
     scan_Id_r = relationship(scan)
 
 class network(Base):

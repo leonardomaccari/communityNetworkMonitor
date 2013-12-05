@@ -53,7 +53,6 @@ class FFWien(plugin):
   
     def checkJSONDump(self):
         """ check if there is a recent dump of the JSON database """
-        #FIXME check the return of this function 
         lastScan = self.localSession.query(scan).order_by(scan.time).\
                 filter(and_((scan.scan_type=="JSON"),
                     (scan.network==self.pluginName))).all()
@@ -65,7 +64,8 @@ class FFWien(plugin):
 
     def getJSONDump(self):
         """ get a new dump of the JSON and store it in the database """
-        #FIXME this should be done in a separte thread, or the getNewTopology should get not only one topology
+        #FIXME this should be done in a separte thread, or the getNewTopology
+        # should get not only one topology
 
         wirelessInterfacesURL = self.baseJSONURL+\
                 "/api/FFM-Wireless_Interface"
@@ -127,10 +127,22 @@ class FFWien(plugin):
                 device = self.getURLWrapper(deviceURL)
                 deviceJSON = self.decodeJSON(device, deviceURL)
                 nodePid = deviceJSON['attributes']['node']['pid']
-                # FIXME
-                # this is not the node name, it is the device name
-                # we need one more get for the node name
-                #nodeName = deviceJSON['attributes']['name']
+                nodeURL = self.baseJSONURL + "/api/FFM-Node/" + str(nodePid)
+                nodeData = self.getURLWrapper(nodeURL)
+                nodeJSON = self.decodeJSON(nodeData, nodeURL)
+                nodeName = nodeJSON['attributes']['name']
+                nodeLat = 0
+                nodeLon = 0
+                nodeOwner = -1
+                nodeManager = nodeJSON['attributes']['manager']['pid']
+
+                if 'owner' in nodeJSON['attributes']:
+                    nodeOwner = nodeJSON['attributes']['owner']['pid']
+
+                if "position" in nodeJSON['attributes']:
+                    nodeLat = nodeJSON['attributes']['position']['lat']
+                    nodeLon = nodeJSON['attributes']['position']['lon']
+
                 presentNode = self.localSession.query(node).filter(and_(
                     (node.Id==nodePid), (node.scan_Id==newScan.Id))).\
                             first()
@@ -140,8 +152,9 @@ class FFWien(plugin):
                     # FIXME I didn't find a way to avoid this query
                     # merge() should be taking care of avoiding 
                     # double inserts, but I can't make it work
-                    newNode = node(Id=nodePid, name="",
-                            scan_Id_r=newScan)
+                    newNode = node(Id=nodePid, name=nodeName, owner=nodeOwner,
+                            lat=nodeLat, lon=nodeLon, manager=nodeManager, 
+                            scan_Id_r=newScan,)
                 self.localSession.merge(newNode)
                 self.localSession.flush()
                 networkEntry = self.localSession.query(network).filter_by(
@@ -208,12 +221,13 @@ class FFWien(plugin):
             raise JSONException
         return ret
 
-    def getLastEntry(self, url, browser):
-        """ get one entry from an HTML table list if it is newer 
+    def getLastEntries(self, url, lastDate):
+        """ get all entries from an HTML table list if it is newer 
         than prevEntry. Format is from graz FF site """
-
+        
+        mech = Browser()
         try:
-            page = browser.open(url)
+            page = mech.open(url)
         except :
             if url == None:
                 url = "(empty url)"
@@ -225,14 +239,22 @@ class FFWien(plugin):
         if len(link) == 0:
             logger.error('No links in the page: %s', url)
             return None, None
-        rowDate = datetime.strptime(link[-1].string, "topo-%Y-%m-%d-%H:%M.tsv.gz")
-        return url+link[-1].string, rowDate
+        returnLinks = []
+
+        for l in link[::-1]:
+            date = datetime.strptime(l.string, "topo-%Y-%m-%d-%H:%M.tsv.gz")
+            if date > lastDate:
+                returnLinks.append(url+l.string)
+            else:
+                break
+
+        return returnLinks
         
     
     def getNewTopology(self):
         """ download the topology file from FFWien website """
 
-        self.logger.info('Getting the latest topology')
+        self.logger.info('Getting the latest topology file list')
         lastDateFromDB = self.localSession.query(scan).filter(and_(
                 (scan.scan_type=="ETX"),(scan.network==self.pluginName))).\
                         order_by(desc(scan.time)).limit(1).first()
@@ -242,23 +264,25 @@ class FFWien(plugin):
                     "%Y-%b-%d %H:%M:%S")
         else:
             lastDate = lastDateFromDB.time
+        linkList = self.getLastEntries(self.baseTopoURL, lastDate)
+
+        if linkList == []:
+            self.logger.info("No new topology files from last scan")
+            return
+        self.logger.info('Need to parse %d files', len(linkList))
+        for fileLink in linkList:
+            self.parseTopologyFile(fileLink)
+
+    def parseTopologyFile(self, fileLink):
+        """ download and parse the topology file """
+
         mech = Browser()
-        fileLink, newDate = self.getLastEntry(self.baseTopoURL, mech)
-
-        if fileLink == None:
+        try:
+            f = mech.retrieve(fileLink)
+        except URLError:
+            self.logger.error("Could not get link %s", filelink)
             return
-
-        if newDate > lastDate:
-            try:
-                f = mech.retrieve(fileLink)
-            except URLError:
-                self.logger.error("Could not get link %s", filelink)
-                return
-        else:
-            self.logger.info("Did not find a new topology file")
-            return
-
-        self.logger.info("Ok, parsing the topology")
+        self.logger.info("Ok, parsing the topology from url %s", fileLink)
         olsrDump = gzip.open(f[0])
         newScan = scan(network=self.pluginName) 
         self.localSession.add(newScan)
@@ -287,7 +311,7 @@ class FFWien(plugin):
                 else:
                     continue
             if ips not in self.IPAddressToNode:
-                self.logger.info("Skipped node IP %s not in the DB",ips)
+                self.logger.debug("Skipped node IP %s not in the DB",ips)
                 numUnknown[ips] = ""
                 continue
             else:
@@ -295,7 +319,8 @@ class FFWien(plugin):
                 G.add_node(self.IPAddressToNode[ips][0], name="")
 
             if ipd not in self.IPAddressToNode:
-                self.logger.info("Skipped node IP %s not in the DB",ipd)
+                #FIXME add to the info logs a summary of the dump (nodes/edges...)
+                self.logger.debug("Skipped node IP %s not in the DB",ipd)
                 numUnknown[ipd] = ""
                 continue
             else:
