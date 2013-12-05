@@ -121,14 +121,18 @@ def addGraphToDB(graph, localSession, scanId):
         else:
             # yes we scanned it
             tmpd = nodes[did]
+        lt = ""
+        if "link_type" in edge[2]:
+            lt=edge[2]['link_type']
         newLink = link(from_node_r=tmps, to_node_r=tmpd, 
-                scan_Id_r=scanId, link_type=edge[2]['link_type'])
+                scan_Id_r=scanId, link_type=lt)
         newEtx = etx(link_r=newLink, etx_value=etxValue)
         localSession.add(newEtx)
     #FIXME should return something here
 
 def initializeDB(parser):
-
+    #FIXME should catch errors here, do not put a default 
+    # in the sqlite database? or add testdb to the git repo
     database =  parser.get('main', 'localdb')
     engine = create_engine(database)
     Base.metadata.create_all(engine)
