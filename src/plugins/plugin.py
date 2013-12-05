@@ -88,11 +88,14 @@ class plugin(Thread):
         raise
 
     def run(self):
-        #self.localSession = self.localSession()
         self.addNetwork()
         while not self.exitAll:
+            lastRun = datetime.now()
             self.getStats()
-            for i in range(self.period):
-                time.sleep(1)
-                if self.exitAll:
-                    break
+            runLenght = (datetime.now() - lastRun).seconds
+            diffTime = (self.period - runLenght)
+            if diffTime > 0:
+                for i in range(diffTime):
+                    time.sleep(1)
+                    if self.exitAll:
+                        break

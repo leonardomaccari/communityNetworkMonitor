@@ -30,8 +30,10 @@ class FFGraz(plugin):
         self.logger = logging.getLogger(self.pluginName)
         self.logger.setLevel(logLevel)
         try:
-            self.period = plugin.convertTime(self.parser.get('ninux', 'period'))
+            self.period = self.convertTime(self.parser.get('ninux', 'period'))
         except:
+            import code
+            code.interact(local=locals())
             self.period = 600
 
     def getStats(self):

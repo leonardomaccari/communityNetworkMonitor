@@ -47,10 +47,11 @@ class FFWien(plugin):
             if self.enabled == True:
                 sys.exit()
         try:
-            self.period = plugin.convertTime(self, self.parser.get('ninux', 
-                'period'))
+            self.period = self.convertTime(self.parser.get('FFWien', 'period'))
         except:
             self.period = 300
+        import code
+        code.interact(local=locals())
   
     def checkJSONDump(self):
         """ check if there is a recent dump of the JSON database """
@@ -414,7 +415,7 @@ class FFWien(plugin):
                     numLinks += 1
                     if len(graph[s][d]) != 1:
                         numDoubleLinks += 1
-                    if s in graph[d]:
+                    if d in graph and s in graph[d]:
                         numReverseLinks += 1
                     
             self.logger.debug("OLSR %d, %d, %d", numLinks, 
