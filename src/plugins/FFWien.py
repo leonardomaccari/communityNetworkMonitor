@@ -206,7 +206,7 @@ class FFWien(plugin):
         try:
             ret = requests.get(url)
         except RequestException as e:
-            self.logger('Could not get URL %s, \'%s\'', url, e.message)
+            self.logger.error('Could not get URL %s, \'%s\'', url, e.message)
             raise URLException
         return ret
 
