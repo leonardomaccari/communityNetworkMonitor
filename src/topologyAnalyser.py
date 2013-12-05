@@ -9,6 +9,7 @@ import getopt
 import os
 import signal
 import requests
+import datetime
 
 import dbmanager
 from plugins.ninux import ninux 
@@ -181,7 +182,8 @@ if __name__ == '__main__':
         threadList.append(ffw)
 
     signal.signal(signal.SIGTERM, termHandler)
-
+    # This is a throwaway variable to deal with a python bug
+    throwaway = datetime.datetime.strptime('20110101','%Y%m%d')
     try:
         for i in threadList:
             i.daemon = True
@@ -197,6 +199,7 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         termHandler(None,None)
 
+    
     logger.info("Received KILL signal")
     waitTime = 20
     while True:
