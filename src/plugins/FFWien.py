@@ -50,8 +50,6 @@ class FFWien(plugin):
             self.period = self.convertTime(self.parser.get('FFWien', 'period'))
         except:
             self.period = 300
-        import code
-        code.interact(local=locals())
   
     def checkJSONDump(self):
         """ check if there is a recent dump of the JSON database """
