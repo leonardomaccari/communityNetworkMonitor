@@ -12,6 +12,7 @@ from mechanize import Browser, URLError
 from threading import Thread
 import logging
 from collections import defaultdict
+import urllib2
 
 from dbmanager import *
 from plugin import plugin
@@ -224,9 +225,10 @@ class FFWien(plugin):
         than prevEntry. Format is from graz FF site """
         
         mech = Browser()
+        mech.set_handle_robots(False)
         try:
             page = mech.open(url)
-        except :
+        except urllib2.HTTPError:
             if url == None:
                 url = "(empty url)"
             self.logger.error("Could not read url "+url)
@@ -283,6 +285,7 @@ class FFWien(plugin):
         """ download and parse the topology file """
 
         mech = Browser()
+        mech.set_handle_robots(False)
         try:
             f = mech.retrieve(fileLink)
         except URLError:
