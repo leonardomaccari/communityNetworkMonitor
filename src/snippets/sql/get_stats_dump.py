@@ -389,7 +389,7 @@ def getCentralityMetrics(net):
     cl = defaultdict(list)
     betSol = defaultdict(list)
     clSol = defaultdict(list)
-    counter = 5 # testing only, limit the number of graphs under analysis
+    counter = 5000 # testing only, limit the number of graphs under analysis
     for scanId in data.routeData[net]:
         if counter <= 0:
             break
@@ -490,6 +490,8 @@ def getCentralityMetrics(net):
             curr = sol
             if prev != [] and curr != []:
                 diffBet[gSize].append(diffVectors(prev[0], curr[0]))
+        prev = []
+        curr = []
         for sol in clSol[gSize]:
             prev = [c for c in curr]
             curr = sol
