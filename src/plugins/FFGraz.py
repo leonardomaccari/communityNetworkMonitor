@@ -111,6 +111,9 @@ class FFGraz(plugin):
         addGraphToDB(simpleG, self.localSession, newScan)
         f.close()
         os.remove(topoFile[0])
+        #FIXME split this function in pieces and add some proper logging for
+        # begin/end of the function. Save the log message as a class plugin
+        # variable so that all plugins use the same message
     
     def aggregateNodesByName(self, graph):
         """ this function takes a graph with node names of the kind x.y.z and

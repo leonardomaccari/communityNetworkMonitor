@@ -10,14 +10,15 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from scipy import optimize
-import pickle as pk
+import cPickle as pk
 import getopt
 from datetime import datetime
 import shutil
 try:
     from groupMetrics import computeGroupMetrics, groupMetricForOneGroup
-except:
-    print >> sys.stderr, "ERROR: You must link into this folder groupMetrics.py and ",
+    from mpr import solveMPRProblem
+except ImportError:
+    print >> sys.stderr, "ERROR: You must link into this folder mpr.py, groupMetrics.py and ",
     "miscLibs.py from the community network analyser tool"
     sys.exit()
 
@@ -110,19 +111,18 @@ def getDataSummary(ls, data):
     numScan = len(q.all())
     scanCounter = 0
     data.etxThreshold = C.etxThreshold
-    round = 12
-    counter = 0
     for [scanId, scanTime, scanType, scanNetwork] in q:
-        if counter % round == 0:
-            data.scanTree[scanNetwork][scanType].append([scanId, scanTime])
-        counter += 1
+        data.scanTree[scanNetwork][scanType].append([scanId, scanTime])
+    
     for net in data.scanTree:
-        for scanId in data.scanTree[net]['ETX'][:C.numRuns]:
+        counter = 0
+        for scanId in data.scanTree[net]['ETX']:
+            if C.numRuns > 0 and counter > C.numRuns:
+                break
             queryString = QUERY % scanId[0]
             q = ls.query("sid", "did", "etxv").\
                     from_statement(queryString)
             dirtyG = nx.Graph()
-            #FIXME check what happens when the graph is empty
             for s,d,e in q:
                 if e < C.etxThreshold:
                     dirtyG.add_edge(s,d, weight=float(e))
@@ -134,6 +134,7 @@ def getDataSummary(ls, data):
                     dirtyG.remove_node(n[0])
                     if len(dirtyG) < 40:
                         break
+
             if len(dirtyG) != 0:
                 G = nx.connected_component_subgraphs(dirtyG)[0]
                 componentSize = len(G)
@@ -141,6 +142,10 @@ def getDataSummary(ls, data):
                 G = nx.Graph()
                 componentSize = 0
            
+            if len(G.nodes()) < 10:
+                continue
+            counter += 1
+
             etxV = [e[2]['weight'] for e in G.edges(data=True)]
             data.rawData[net][scanId[0]] = etxV
             data.routeData[net][scanId[0]]["Graph"] = G
@@ -179,6 +184,7 @@ def getETXDistribution(etxList, norm, b, printBins, net ):
     etx = plt.subplot(1,1,1)
     etx.yaxis.tick_left()
     etx.plot(b[:printBins-1], h[0:printBins-1], color="blue")
+    plt.ylabel("samples")
 
     sumSamples = []
     partialSum = 0
@@ -192,6 +198,7 @@ def getETXDistribution(etxList, norm, b, printBins, net ):
     etxSum.plot(b[:printBins-1], 
             (np.array(sumSamples)/totalSamples)[0:printBins-1], 
             color="red")
+    plt.title("ETX value frequency/cumulative, "+net)
     #etxSum.set_yscale("log")
     #etxSum.set_xscale("log")
     #etx.set_xscale("log")
@@ -204,7 +211,7 @@ def getETXDistribution(etxList, norm, b, printBins, net ):
         pass
     plt.savefig(etxFolder+"ETX-distribution.png")
     plt.clf()
-                
+
 
 def getLinkDistributions(net, numBins):
     b = np.array(range(1,201))/10.0
@@ -263,6 +270,7 @@ def getRouteDistributions(net):
     maxETX = int(max(etxList))
     hh,bh = np.histogram(numHops, bins=maxHops)
     he,be = np.histogram(etxList, bins=maxETX)
+    plt.xlabel("ETX weight/hop count")
     freq = plt.subplot(1,1,1)
     ep = freq.plot(be[:len(he)], he, label="ETX")
     hp = freq.plot(bh[:len(hh)], hh, label="numHops")
@@ -273,6 +281,16 @@ def getRouteDistributions(net):
     #plt.legend([ep,hp], ["etx", "hopCount"])
     freq.legend(loc="center right")
     cumulativeH = []
+    cumulativeE = []
+    partialsum = 0.0
+    plt.title("Path lenght/weight distribution")
+    for i in he:
+        partialsum += i
+        cumulativeE.append(partialsum)
+
+    cum.plot(be[:len(cumulativeE)], 
+            np.array(cumulativeE)/partialsum, "--",
+            label = "Cumulative ETX")
     partialsum = 0.0
     for i in hh:
         partialsum += i
@@ -280,18 +298,9 @@ def getRouteDistributions(net):
     cum.plot(bh[:len(cumulativeH)], 
             np.array(cumulativeH)/partialsum, "--",
             label = "Cumulative hopCount")
-    cumulativeE = []
-    partialsum = 0.0
-    for i in he:
-        partialsum += i
-        cumulativeE.append(partialsum)
-    cum.plot(be[:len(cumulativeE)], 
-            np.array(cumulativeE)/partialsum, "--",
-            label = "Cumulative ETX")
     cum.legend(loc="lower right")
     plt.savefig(routeFolder+"/routes.png")
 
-    plt.ylabel("samples")
     plt.clf()
     sortedEtx = []
     for l in sorted(numHopMap):
@@ -319,8 +328,8 @@ def getRouteDistributions(net):
     cum.plot(b[:len(cumulative)], 
             np.array(cumulative)/partialsum, 
             color = "green")
-    cum.set_yscale("log")
-    cum.set_xscale("log")
+    #cum.set_yscale("log")
+    #cum.set_xscale("log")
     plt.savefig(routeFolder+"/00-ETX-STD.png")
     plt.clf()
 
@@ -389,12 +398,15 @@ def getCentralityMetrics(net):
     cl = defaultdict(list)
     betSol = defaultdict(list)
     clSol = defaultdict(list)
-    counter = 5000 # testing only, limit the number of graphs under analysis
+    counter = 700 # testing only, limit the number of graphs under analysis
     for scanId in data.routeData[net]:
         if counter <= 0:
-            break
+            return
         counter -= 1
         G = data.routeData[net][scanId]["Graph"]
+        if len(G.nodes()) < 10:
+            print >> sys.stderr, "ERROR, graph has only ", len(G.nodes()), "nodes!"
+            continue
         # this will make a global graph of all the runs
         singleNodeBetweenness += nx.betweenness_centrality(G).values()
         singleNodeCloseness += nx.closeness_centrality(G, distance=True, 
@@ -405,6 +417,7 @@ def getCentralityMetrics(net):
         solBet, bestBet, solCl, bestCl, currCache = computeGroupMetrics(G, 
                 C.maxGroupSize, weighted=True, 
                 mode="greedy")
+        print solCl, bestCl, solBet
         # this is used to approximate centrality with degree
         degreeDict = sorted(G.degree().items(), 
                 key = lambda x: x[1], reverse=True)
@@ -489,14 +502,14 @@ def getCentralityMetrics(net):
             prev = [c for c in curr]
             curr = sol
             if prev != [] and curr != []:
-                diffBet[gSize].append(diffVectors(prev[0], curr[0]))
+                diffBet[gSize].append(diffVectors(prev, curr))
         prev = []
         curr = []
         for sol in clSol[gSize]:
             prev = [c for c in curr]
             curr = sol
             if prev != [] and curr != []:
-                diffCl[gSize].append(diffVectors(prev[0], curr[0]))
+                diffCl[gSize].append(diffVectors(prev, curr))
 
     plt.clf()
     betG = plt.subplot(1,1,1)
@@ -595,6 +608,54 @@ def getCentralityMetrics(net):
 
 
 
+def getMPRSets(net, mprMode):
+    routeFolder = C.resultDir+net+"/"
+    counter = 700 # testing only, limit the number of graphs under analysis
+    mpr = []
+    for scanId in data.routeData[net]:
+        if counter <= 0:
+            return
+        counter -= 1
+        G = data.routeData[net][scanId]["Graph"]
+        if len(G.nodes()) < 10:
+            print >> sys.stderr, "ERROR, graph has only ", len(G.nodes()),\
+                    "nodes!"
+            continue
+        mprSets = solveMPRProblem(G, mode=mprMode)
+        globalMPRSet = set()
+        for node in mprSets:
+            globalMPRSet |= mprSets[node].pop()
+        mpr.append(globalMPRSet)
+
+    plt.plot(range(len(mpr)), [len(x) for x in mpr])
+    plt.title("Global MPR set size, mode=\""+mprMode+"\","+net)
+    plt.xlabel("snapshots")
+    plt.ylabel("global MPR set size")
+    plt.savefig(routeFolder+"/mpr-set-size-"+net+"-"+mprMode+".png")
+    plt.clf()
+    mprDiff = []
+    prev = set()
+    curr = set()
+    for mprs in mpr:
+        prev = set([c for c in curr])
+        curr = mprs
+        if prev != set() and curr != set():
+            intersection = prev.intersection(curr)
+            diff = len(prev) - len(intersection) + len(curr) - len(intersection)
+            mprDiff.append(diff)
+
+    plt.plot(range(len(mprDiff)), mprDiff)
+    plt.title("Global MPR set diff from one sample to the next one,"+\
+            "mode=\""+mprMode+"\","+net)
+    plt.xlabel("snapshots")
+    plt.ylabel("elements that differ")
+    plt.savefig(routeFolder+"/mpr-diff-"+net+"-"+mprMode+".png")
+    plt.clf()
+    
+
+
+
+
 class configuration:
     def __init__(self):
         self.loadFile = ""
@@ -670,6 +731,8 @@ if  __name__ =='__main__':
         sys.exit(1)
 
 
+    startTime =  datetime.now()
+    print "loading", datetime.now()
     print C.loadDb
     if C.loadDb != "":
         engine = create_engine(C.loadDb)
@@ -687,11 +750,13 @@ if  __name__ =='__main__':
             sys.exit()
 
 
+    loadTime =  datetime.now() - startTime
     if C.saveDump != "":
         data.save(C.saveDump)
         sys.exit()
 
     logString = ""
+    print "loaded", datetime.now()
 
     centFolder = C.resultDir+"/CENTRALITY"
     try:
@@ -727,14 +792,18 @@ if  __name__ =='__main__':
         for scanId in data.rawData[net]:
             netEtx += data.rawData[net][scanId]
         getRouteDistributions(net)
-        getDegreeDistribution(net)
-        getETXDistribution(netEtx, len(data.rawData[net]), 1000, 1000, net)
-        getLinkDistributions(net, 10)
-        getCentralityMetrics(net)
+        #getDegreeDistribution(net)
+        #getETXDistribution(netEtx, len(data.rawData[net]), 1000, 1000, net)
+        #getLinkDistributions(net, 10)
+        #getCentralityMetrics(net)
+        #getMPRSets(net, "RFC")
+        #getMPRSets(net, "lq")
     f = open(C.resultDir+"/logfile.txt", "w")
+    runTime = datetime.now() - startTime - loadTime
     print >> f,  data.printSummary()
     print >> f, logString
     print >> f, "Whiskers = q3+/-1.5*IQR"
+    print >> f, "loadTime =", loadTime, "runTime =", runTime
     f.close()
 
 
