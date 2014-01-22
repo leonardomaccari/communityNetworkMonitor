@@ -8,6 +8,9 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 import code
 import numpy as np
 import networkx as nx
+import matplotlib
+# use the Agg backend, not X, for ssh shells
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy import optimize
 import cPickle as pk
