@@ -119,8 +119,14 @@ def getDataSummary(ls, data):
     
     for net in data.scanTree:
         counter = 0
+	# for graz I have one sample every 10 minutes,
+        # for ninux/Wien I have one sample every 5 minutes
+	if net == FFGraz:
+	    networkPenalty = 2
+	else:
+	    networkPenalty = 1
         for scanId in data.scanTree[net]['ETX']:
-            if C.numRuns > 0 and counter > C.numRuns:
+            if C.numRuns > 0 and counter > C.numRuns/networkPenalty:
                 break
             queryString = QUERY % scanId[0]
             q = ls.query("sid", "did", "etxv").\
@@ -420,7 +426,6 @@ def getCentralityMetrics(net):
         solBet, bestBet, solCl, bestCl, currCache = computeGroupMetrics(G, 
                 C.maxGroupSize, weighted=True, 
                 mode="greedy")
-        print solCl, bestCl, solBet
         # this is used to approximate centrality with degree
         degreeDict = sorted(G.degree().items(), 
                 key = lambda x: x[1], reverse=True)
@@ -795,12 +800,12 @@ if  __name__ =='__main__':
         for scanId in data.rawData[net]:
             netEtx += data.rawData[net][scanId]
         getRouteDistributions(net)
-        #getDegreeDistribution(net)
-        #getETXDistribution(netEtx, len(data.rawData[net]), 1000, 1000, net)
+        getDegreeDistribution(net)
+        getETXDistribution(netEtx, len(data.rawData[net]), 1000, 1000, net)
         #getLinkDistributions(net, 10)
-        #getCentralityMetrics(net)
-        #getMPRSets(net, "RFC")
-        #getMPRSets(net, "lq")
+        getCentralityMetrics(net)
+        getMPRSets(net, "RFC")
+        getMPRSets(net, "lq")
     f = open(C.resultDir+"/logfile.txt", "w")
     runTime = datetime.now() - startTime - loadTime
     print >> f,  data.printSummary()
