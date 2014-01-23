@@ -14,6 +14,8 @@ import cPickle as pk
 import getopt
 from datetime import datetime
 import shutil
+from multiprocessing import Process, Queue
+
 try:
     from groupMetrics import computeGroupMetrics, groupMetricForOneGroup
     from mpr import solveMPRProblem
@@ -177,481 +179,551 @@ def getDataSummary(ls, data):
             if int((100000 * 1.0*scanCounter / numScan)) % 10000 == 0:
                 print int((100 * 1.0*scanCounter / numScan)),"% complete"
 
-def getETXDistribution(etxList, norm, b, printBins, net ):
-    cleanList = [e for e in etxList if e < 10]
-    h,b = np.histogram(cleanList, bins=b) 
-    totalSamples = sum(h)*1.0
-    etx = plt.subplot(1,1,1)
-    etx.yaxis.tick_left()
-    etx.plot(b[:printBins-1], h[0:printBins-1], color="blue")
-    plt.ylabel("samples")
 
-    sumSamples = []
-    partialSum = 0
-    for v in h:
-        partialSum += v
-        sumSamples.append(partialSum)
-    etxSum=etx.twinx()
-    etxSum.yaxis.tick_right()
-    etxSum.yaxis.set_label_position("right")
-    etxSum.set_ylim([0,1])
-    etxSum.plot(b[:printBins-1], 
-            (np.array(sumSamples)/totalSamples)[0:printBins-1], 
-            color="red")
-    plt.title("ETX value frequency/cumulative, "+net)
-    #etxSum.set_yscale("log")
-    #etxSum.set_xscale("log")
-    #etx.set_xscale("log")
-    #etx.set_yscale("log")
-    etxFolder = C.resultDir+net+"/ETX/"
+class dataParser():
+    net = "" 
 
-    try:
-        os.mkdir(etxFolder)
-    except:
-        pass
-    plt.savefig(etxFolder+"ETX-distribution.png")
-    plt.clf()
+    def __init__(self, netName):
+        self.net = netName
 
+    def run(self):
+        try:
+            os.makedirs(C.resultDir+self.net)
+        except OSError:
+            try:
+                os.mkdir(C.resultDir+"/backup/")
+            except:
+                pass
+            now =  datetime.now()
+            newFolder = C.resultDir+"backup/"+self.net+str(now.month)+\
+                    str(now.day)+str(now.hour)+\
+                    str(now.minute)+str(now.second)
+            shutil.move(C.resultDir+self.net, newFolder)
+            os.mkdir(C.resultDir+self.net)
+        netEtx = []
+        for scanId in data.rawData[self.net]:
+            netEtx += data.rawData[self.net][scanId]
+        self.getRouteDistributions(self.net)
+        #getDegreeDistribution(self.net)
+        #getETXDistribution(netEtx, len(data.rawDataself.[net]), 1000, 1000, self.net)
+        #getLinkDistributions(self.net, 10)
+        #getCentralityMetrics(self.net)
+        #getMPRSets(self.net, "RFC")
+        #getMPRSets(self.net, "lq")
 
-def getLinkDistributions(net, numBins):
-    b = np.array(range(1,201))/10.0
-    linkFolder = C.resultDir+net+"/LINKS/"
-    try:
-        os.mkdir(linkFolder)
-    except:
-        pass
-    for s in data.linkData[net]:
-        for d,vArray in data.linkData[net][s].items():
-            #if len(vArray) < len(data.dataSummary[net]):
-            #    continue
-            cleanList = [ e for e in vArray if e < 20]
-            h,x = np.histogram(cleanList, bins = b)
-            plt.plot(b[:len(h)], h)
-            plt.savefig(linkFolder+"/l-"+s+d+".png")
-            plt.clf()
-
-def getRouteDistributions(net):
-    routeFolder = C.resultDir+net+"/ROUTES"
-    try:
-        os.mkdir(routeFolder)
-    except:
-        pass
-    b = np.array(range(1,201))/10.0
-    numHops = []
-    etxList = []
-    etxTime = dd2()
-    numHopMap = defaultdict(list)
-    for scan in data.routeData[net]:
-        D = data.routeData[net][scan]['data']
-        for s in D:
-            for d in D[s]:
-                if D[s][d][1] < 60:
-                    numHops.append(D[s][d][0])
-                    etxList.append(D[s][d][1])
-                    numHopMap[D[s][d][0]].append(D[s][d][1])
-                    etxTime[s][d].append([D[s][d][1], D[s][d][0]])
-    etxStd = []
-    etxMap = defaultdict(list)
-    printDists = -1
-    for s in etxTime:
-        for d in etxTime[s]:
-            e = zip(*etxTime[s][d])[0]
-            c = zip(*etxTime[s][d])[1]
-            interval = max(e)-min(e)
-            etxStd.append(interval)
-            etxMap[round(np.average(c))].append(interval)
-            if printDists > 0:
-                plt.plot(e)
-                plt.savefig(routeFolder+"/ETXd-"+s+"-"+d+".png")
-                plt.clf()
-                printDists -= 1
-
-    maxHops = int(max(numHops))
-    maxETX = int(max(etxList))
-    hh,bh = np.histogram(numHops, bins=maxHops)
-    he,be = np.histogram(etxList, bins=maxETX)
-    plt.xlabel("ETX weight/hop count")
-    freq = plt.subplot(1,1,1)
-    ep = freq.plot(be[:len(he)], he, label="ETX")
-    hp = freq.plot(bh[:len(hh)], hh, label="numHops")
-    cum = freq.twinx()
-    cum.yaxis.tick_right()
-    cum.yaxis.set_label_position("right")
-    cum.set_ylim([0,1])
-    #plt.legend([ep,hp], ["etx", "hopCount"])
-    freq.legend(loc="center right")
-    cumulativeH = []
-    cumulativeE = []
-    partialsum = 0.0
-    plt.title("Path lenght/weight distribution")
-    for i in he:
-        partialsum += i
-        cumulativeE.append(partialsum)
-
-    cum.plot(be[:len(cumulativeE)], 
-            np.array(cumulativeE)/partialsum, "--",
-            label = "Cumulative ETX")
-    partialsum = 0.0
-    for i in hh:
-        partialsum += i
-        cumulativeH.append(partialsum)
-    cum.plot(bh[:len(cumulativeH)], 
-            np.array(cumulativeH)/partialsum, "--",
-            label = "Cumulative hopCount")
-    cum.legend(loc="lower right")
-    plt.savefig(routeFolder+"/routes.png")
-
-    plt.clf()
-    sortedEtx = []
-    for l in sorted(numHopMap):
-        sortedEtx.append(numHopMap[l])
-    labels=(sorted(numHopMap))
-    plt.xticks(range(len(labels)), labels)
-    plt.boxplot(sortedEtx)
-    plt.title("route weight Vs route lenght")
-    plt.savefig(routeFolder+"/00-box.png")
-    plt.clf()
-
-    s,b = np.histogram(etxStd, bins=100)
-    es = plt.subplot(1,1,1)
-    plt.title("ETX Standard deviation per route (density/cumulative)")
-    es.plot(b[:len(s)], s, label="ETX STD")
-    cum = es.twinx()
-    cumulative = []
-    partialsum = 0.0
-    for i in s:
-        partialsum += i
-        cumulative.append(partialsum)
-    cum.yaxis.tick_right()
-    cum.yaxis.set_label_position("right")
-    cum.set_ylim([0,1])
-    cum.plot(b[:len(cumulative)], 
-            np.array(cumulative)/partialsum, 
-            color = "green")
-    #cum.set_yscale("log")
-    #cum.set_xscale("log")
-    plt.savefig(routeFolder+"/00-ETX-STD.png")
-    plt.clf()
-
-
-    sortedEtxPerCouple = []
-    for l in sorted(etxMap):
-        sortedEtxPerCouple.append(etxMap[l])
-    labels=[int(x) for x in (sorted(etxMap))]
-    plt.xticks(range(len(labels)), labels)
-    plt.boxplot(sortedEtxPerCouple)
-    plt.title("Route weight max - route weight min Vs average lenght")
-    plt.savefig(routeFolder+"/00-ETX-box.png")
-    plt.clf()
-
-def getDegreeDistribution(net):
-    routeFolder = C.resultDir+net+"/ROUTES"
-    degreeDistribution = defaultdict(float)
-    samples = 0.0
-    for scanId in data.routeData[net]:
-        graph = data.routeData[net][scanId]["Graph"]
-        for node in graph:
-            degreeDistribution[graph.degree(node)] += 1
-            samples += 1
-    for d in degreeDistribution:
-        degreeDistribution[d] /= samples
-    x = degreeDistribution.keys()
-    y = degreeDistribution.values()
-
-    #thanks stackoverflow!
-    fitfunc = lambda p, x: p[0] * x ** (p[1])
-    errfunc = lambda p, x, y: (y - fitfunc(p, x))
+    def getETXDistribution(self, etxList, norm, b, printBins, net ):
+        cleanList = [e for e in etxList if e < 10]
+        h,b = np.histogram(cleanList, bins=b) 
+        totalSamples = sum(h)*1.0
+        etx = plt.subplot(1,1,1)
+        etx.yaxis.tick_left()
+        etx.plot(b[:printBins-1], h[0:printBins-1], color="blue")
+        plt.ylabel("samples")
     
-    out,success = optimize.leastsq(errfunc, 
-            [1,-1],args=(x,y))
-    fittedValue = []
-    for v in x:
-        fittedValue.append(out[0]*(v**out[1]))
-    p = plt.subplot(1,1,1)
-    p.plot(x, degreeDistribution.values(), "ro", x, fittedValue)
-    p.set_xscale("log")
-    p.set_yscale("log")
-    #p.set_ylim(0,1)
-    #plt.ylim([0.0001,0])
-    plt.title("degree frequency graph (m=%s)"%str(out[1])[0:6])
-    plt.savefig(routeFolder+"/degree.png")
-    plt.clf()
-
-def diffVectors(v1,v2):
-    if len(v1) != len(v2):
-        print >> sys.stderr, "Error, comparing two different arrays", v1, v2
-        sys.exit(1)
-    diff = 0
-    for item in v1:
-        if item not in v2:
-            diff += 1
-    return diff
-
-
-def getCentralityMetrics(net):
-    bet = defaultdict(list) 
-    betApproxCloseness = defaultdict(list) 
-    betApproxDegree = defaultdict(list) 
-    betApproxWeightedDegree = defaultdict(list) 
-    singleNodeBetweenness = []
-    singleNodeCloseness = []
-    cl = defaultdict(list)
-    betSol = defaultdict(list)
-    clSol = defaultdict(list)
-    counter = 700 # testing only, limit the number of graphs under analysis
-    for scanId in data.routeData[net]:
-        if counter <= 0:
-            return
-        counter -= 1
-        G = data.routeData[net][scanId]["Graph"]
-        if len(G.nodes()) < 10:
-            print >> sys.stderr, "ERROR, graph has only ", len(G.nodes()), "nodes!"
-            continue
-        # this will make a global graph of all the runs
-        singleNodeBetweenness += nx.betweenness_centrality(G).values()
-        singleNodeCloseness += nx.closeness_centrality(G, distance=True, 
-                normalized=False).values()
-
-        # this will call a multi-process routine that will compute the 
-        # betweenness
-        solBet, bestBet, solCl, bestCl, currCache = computeGroupMetrics(G, 
-                C.maxGroupSize, weighted=True, 
-                mode="greedy")
-        print solCl, bestCl, solBet
-        # this is used to approximate centrality with degree
-        degreeDict = sorted(G.degree().items(), 
-                key = lambda x: x[1], reverse=True)
-        highDegreeDict = [ i for i in reversed(degreeDict[:C.maxGroupSize]) ]
-
-        unsortedNodeWeightedDegreeDict = []
-        # this weights degree with the weight of the links
-        for n in degreeDict:
-            if n[1] == 1:
-                break
-            nodeWeight = 0.0
-            neighs = G[n[0]]
-            for neigh in neighs:
-                nodeWeight += 1/G[n[0]][neigh]['weight'] 
-            unsortedNodeWeightedDegreeDict.append((n[0], nodeWeight))
-
-        nodeWeightedDegreeDict = sorted(unsortedNodeWeightedDegreeDict,
-                key = lambda x: x[1])[-C.maxGroupSize:]
-
-        # Big Note: when the betweenness centrality is computed
-        # using the degree to chose the group g, it may not be a monotone 
-        # value anymore. This is due to the fact that when we compute the
-        # centrality, we do not condier routes that start from a node in g.
-        # A node x may have a large number of neighbors but all of them
-        # with a bad quality, so no new routes pass throu x. but if we 
-        # add x to g, we reduce the total number of routes R we use 
-        # in the fraction to compute the average. As a result betweenness may
-        # decrease. Consider the following network as an example of this:
-        #
-        #  1 -- 2 -- 3 -- 4
-        #       |    X
-        #       -- 5--
-        # 
-        # the link marked with X is very bad. At the first iteration g = [2]
-        # do we have 14 routes passing through g and 2 not passing (3->4 and
-        # 4->3). Then g = [2,5]. Since the routes starting from 5 are not 
-        # counted anymore, the fraction is 10/(10+2) < 14/(14+2).
-        # That's why we also use a weighted degree sorting
-        #
-
-        highClosenessDict = sorted(nx.closeness_centrality(G).items(), 
-                key = lambda x: x[1])[-C.maxGroupSize:]
-
-        # compute the betweenness of some group of nodes
-        for gSize in solBet:
-            (b,c) = groupMetricForOneGroup(G, 
-                    [x[0] for x in highClosenessDict][-gSize:], 
-                    currCache)
-            betApproxCloseness[gSize].append(b)
-            (b,c) = groupMetricForOneGroup(G, 
-                    [x[0] for x in highDegreeDict][-gSize:], 
-                    currCache)
-            betApproxDegree[gSize].append(b)
-            (b,c) = groupMetricForOneGroup(G, 
-                    [x[0] for x in nodeWeightedDegreeDict][-gSize:], 
-                    currCache)
-            betApproxWeightedDegree[gSize].append(b)
-            bet[gSize].append(solBet[gSize])
-            cl[gSize].append(solCl[gSize])
-            betSol[gSize].append(bestBet[gSize])
-            clSol[gSize].append(bestCl[gSize])
-
-    avgBet = {}
-    avgCl = {}
-    avgBetApproxDegree = {}
-    avgBetApproxWeightedDegree = {}
-    avgBetApproxCloseness = {}
-    diffBet = defaultdict(list)
-    diffCl = defaultdict(list)
+        sumSamples = []
+        partialSum = 0
+        for v in h:
+            partialSum += v
+            sumSamples.append(partialSum)
+        etxSum=etx.twinx()
+        etxSum.yaxis.tick_right()
+        etxSum.yaxis.set_label_position("right")
+        etxSum.set_ylim([0,1])
+        etxSum.plot(b[:printBins-1], 
+                (np.array(sumSamples)/totalSamples)[0:printBins-1], 
+                color="red")
+        plt.title("ETX value frequency/cumulative, "+net)
+        #etxSum.set_yscale("log")
+        #etxSum.set_xscale("log")
+        #etx.set_xscale("log")
+        #etx.set_yscale("log")
+        etxFolder = C.resultDir+net+"/ETX/"
     
-    # average the betweenness of multiple samples
-    for gSize in bet:
-        avgBet[gSize] = np.average(bet[gSize])
-        avgCl[gSize] = np.average(cl[gSize])
-        avgBetApproxDegree[gSize] = np.average(betApproxDegree[gSize])
-        avgBetApproxWeightedDegree[gSize] = np.average(
-                betApproxWeightedDegree[gSize])
-        avgBetApproxCloseness[gSize] = np.average(betApproxCloseness[gSize])
-        prev = []
-        curr = []
-        for sol in betSol[gSize]:
-            prev = [c for c in curr]
-            curr = sol
-            if prev != [] and curr != []:
-                diffBet[gSize].append(diffVectors(prev, curr))
-        prev = []
-        curr = []
-        for sol in clSol[gSize]:
-            prev = [c for c in curr]
-            curr = sol
-            if prev != [] and curr != []:
-                diffCl[gSize].append(diffVectors(prev, curr))
-
-    plt.clf()
-    betG = plt.subplot(1,1,1)
-    betG.set_ylim([0,1])
-    betG.plot(avgBet.keys(), avgBet.values(), color="blue", 
-            label="betweenness")
-    betG.plot(avgBet.keys(), avgBetApproxDegree.values(), color="red", 
-            label="betweenness/degree-approx")
-    betG.plot(avgBet.keys(), avgBetApproxCloseness.values(), color="gray", 
-            label="betweenness/approx-closeness")
-    betG.plot(avgBet.keys(), avgBetApproxWeightedDegree.values(), 
-            color="green", label="betweenness/approx-weighted-degree")
-    betG.legend(loc="lower right")
-    betG.yaxis.grid(color='gray', linestyle='dashed')
-    betG.set_axisbelow(True)
-    plt.ylabel("Betweenness")
-    plt.xlabel("Group size")
-    plt.xticks(avgBet.keys())
-    plt.title("Betweenness centrality - "+net)
-    plt.savefig(centFolder+"/cent-betw-"+net+".png")
-    plt.clf()
-
-    clG = plt.subplot(1,1,1)
-    clG.set_ylim([1, avgCl.values()[0]])
-    clG.plot(avgCl.keys(), avgCl.values(), color="green", label="closeness")
-    clG.legend(loc="lower right")
-    plt.xlabel("Group size")
-    plt.xticks(avgCl.keys())
-    plt.ylabel("Closeness")
-    plt.title("Closeness centrality - "+net)
-    plt.savefig(centFolder+"/cent-cl-"+net+".png")
-    plt.clf()
-
-    for size in diffBet:
-        plt.plot(range(len(diffBet[size])), diffBet[size], 
-                label="group size " + str(size))
-    plt.title(net + ". Variations in the central sets per run, betweenness.")
-    plt.xlabel("run id")
-    plt.ylabel("differing elements from prev run")
-    plt.legend(loc="lower right")
-    plt.savefig(centFolder+"/cent-bet-variation-"+net+".png")
-    plt.clf()
-    for size in diffCl:
-        plt.plot(range(len(diffCl[size])), diffCl[size],
-                label="group size " + str(size))
-    plt.title(net + ". Variations in the central sets per run, closeness")
-    plt.legend(loc="lower right")
-    plt.savefig(centFolder+"/cent-cl-variation-"+net+".png")
-    plt.clf()
+        try:
+            os.mkdir(etxFolder)
+        except:
+            pass
+        plt.savefig(etxFolder+"ETX-distribution.png")
+        plt.clf()
     
-    h,b = np.histogram(singleNodeBetweenness, bins=100) 
-    totalSamples = sum(h)
-    sb = plt.subplot(1,1,1)
-    sb.yaxis.tick_left()
-    sb.plot(b[1:], h, color="blue")
-    plt.ylabel("# Samples")
-    plt.xlabel("Betweenness")
-
-    sumSamples = []
-    partialSum = 0.0
-    for v in h:
-        partialSum += v
-        sumSamples.append(partialSum)
-    sbSum=sb.twinx()
-    sbSum.yaxis.tick_right()
-    sbSum.yaxis.set_label_position("right")
-    sbSum.set_ylim([0,1])
-    sbSum.plot(b[1:], (np.array(sumSamples)/totalSamples), 
-            color="red")
-    plt.title("Centrality histogram and normalized integral (all runs)")
-    plt.savefig(centFolder+"/betw-singleNode-"+net+".png")
-
-    plt.clf()
-    h,b = np.histogram([1/x for x in singleNodeCloseness], bins=100) 
-    totalSamples = sum(h)
-    sb = plt.subplot(1,1,1)
-    sb.yaxis.tick_left()
-    sb.plot(b[1:], h, color="blue")
-    plt.title("Centrality histogram and normalized integral (all runs)")
-    plt.xlabel("Closeness")
-    plt.ylabel("# Samples")
-
-    sumSamples = []
-    partialSum = 0.0
-    for v in h:
-        partialSum += v
-        sumSamples.append(partialSum)
-    sbSum=sb.twinx()
-    sbSum.yaxis.tick_right()
-    sbSum.yaxis.set_label_position("right")
-    sbSum.set_ylim([0,1])
-    sbSum.plot(b[1:], (np.array(sumSamples)/totalSamples), 
-            color="red")
-    plt.savefig(centFolder+"/clos-singleNode-"+net+".png")
-    plt.clf()
-
-
-
-def getMPRSets(net, mprMode):
-    routeFolder = C.resultDir+net+"/"
-    counter = 700 # testing only, limit the number of graphs under analysis
-    mpr = []
-    for scanId in data.routeData[net]:
-        if counter <= 0:
-            return
-        counter -= 1
-        G = data.routeData[net][scanId]["Graph"]
-        if len(G.nodes()) < 10:
-            print >> sys.stderr, "ERROR, graph has only ", len(G.nodes()),\
-                    "nodes!"
-            continue
-        mprSets = solveMPRProblem(G, mode=mprMode)
-        globalMPRSet = set()
-        for node in mprSets:
-            globalMPRSet |= mprSets[node].pop()
-        mpr.append(globalMPRSet)
-
-    plt.plot(range(len(mpr)), [len(x) for x in mpr])
-    plt.title("Global MPR set size, mode=\""+mprMode+"\","+net)
-    plt.xlabel("snapshots")
-    plt.ylabel("global MPR set size")
-    plt.savefig(routeFolder+"/mpr-set-size-"+net+"-"+mprMode+".png")
-    plt.clf()
-    mprDiff = []
-    prev = set()
-    curr = set()
-    for mprs in mpr:
-        prev = set([c for c in curr])
-        curr = mprs
-        if prev != set() and curr != set():
-            intersection = prev.intersection(curr)
-            diff = len(prev) - len(intersection) + len(curr) - len(intersection)
-            mprDiff.append(diff)
-
-    plt.plot(range(len(mprDiff)), mprDiff)
-    plt.title("Global MPR set diff from one sample to the next one,"+\
-            "mode=\""+mprMode+"\","+net)
-    plt.xlabel("snapshots")
-    plt.ylabel("elements that differ")
-    plt.savefig(routeFolder+"/mpr-diff-"+net+"-"+mprMode+".png")
-    plt.clf()
     
+    def getLinkDistributions(self, net, numBins):
+        linkFolder = C.resultDir+net+"/LINKS/"
+        try:
+            os.mkdir(linkFolder)
+        except:
+            pass
+        etxRanking = []
+        for s in data.linkData[net]:
+            for d,vArray in data.linkData[net][s].items():
+                # considering only the links that appear in 
+                # at least 30% of the samples
+                if len(vArray) < 0.3*len(data.dataSummary[net]):
+                    continue
+                cleanList = [ e for e in vArray if e < 20]
+                avgEtx = np.average(cleanList)
+                avgStd = np.std(cleanList)
+                etxRanking.append([avgEtx, avgEtx+avgStd/2, avgEtx-avgStd/2])
+         
+        plt.plot(range(len(etxRanking)), 
+                [e[0] for e in sorted(etxRanking, key = lambda x: x[0])], 
+                range(len(etxRanking)), 
+                [e[1] for e in sorted(etxRanking, key = lambda x: x[0])], 
+                range(len(etxRanking)), 
+                [e[2] for e in sorted(etxRanking, key = lambda x: x[0])])
+    
+        plt.title("Average and standard deviation for ETX per link")
+        plt.xlabel("link Id")
+        plt.ylabel("Average ETX +/- 0.5*std")
+        plt.savefig(linkFolder+"/link-ranking.png")
+        plt.clf()
+    
+    def getRouteDistributions(self, net):
+        routeFolder = C.resultDir+net+"/ROUTES"
+        try:
+            os.mkdir(routeFolder)
+        except:
+            pass
+        b = np.array(range(1,201))/10.0
+        numHops = []
+        etxList = []
+        etxTime = dd2()
+        numHopMap = defaultdict(list)
+        for scan in data.routeData[net]:
+            D = data.routeData[net][scan]['data']
+            for s in D:
+                for d in D[s]:
+                    if D[s][d][1] < 60:
+                        numHops.append(D[s][d][0])
+                        etxList.append(D[s][d][1])
+                        numHopMap[D[s][d][0]].append(D[s][d][1])
+                        etxTime[s][d].append([D[s][d][1], D[s][d][0]])
+        etxStd = []
+        etxMap = defaultdict(list)
+        printDists = -1
+        for s in etxTime:
+            for d in etxTime[s]:
+                e = zip(*etxTime[s][d])[0]
+                c = zip(*etxTime[s][d])[1]
+                interval = max(e)-min(e)
+                etxStd.append(interval)
+                etxMap[round(np.average(c))].append(interval)
+                if printDists > 0:
+                    plt.plot(e)
+                    plt.savefig(routeFolder+"/ETXd-"+s+"-"+d+".png")
+                    plt.clf()
+                    printDists -= 1
+    
+        maxHops = int(max(numHops))
+        maxETX = int(max(etxList))
+        hh,bh = np.histogram(numHops, bins=maxHops)
+        he,be = np.histogram(etxList, bins=maxETX)
+        plt.xlabel("ETX weight/hop count")
+        freq = plt.subplot(1,1,1)
+        ep = freq.plot(be[:len(he)], he, label="ETX")
+        hp = freq.plot(bh[:len(hh)], hh, label="numHops")
+        cum = freq.twinx()
+        cum.yaxis.tick_right()
+        cum.yaxis.set_label_position("right")
+        cum.set_ylim([0,1])
+        #plt.legend([ep,hp], ["etx", "hopCount"])
+        freq.legend(loc="center right")
+        cumulativeH = []
+        cumulativeE = []
+        partialsum = 0.0
+        plt.title("Path lenght/weight distribution")
+        for i in he:
+            partialsum += i
+            cumulativeE.append(partialsum)
+    
+        cum.plot(be[:len(cumulativeE)], 
+                np.array(cumulativeE)/partialsum, "--",
+                label = "Cumulative ETX")
+        partialsum = 0.0
+        totRoutes = 0
+        for i in hh:
+            partialsum += i
+            cumulativeH.append(partialsum)
+            totRoutes = partialsum
+        cum.plot(bh[:len(cumulativeH)], 
+                np.array(cumulativeH)/partialsum, "--",
+                label = "Cumulative hopCount")
+        cum.legend(loc="lower right")
+        plt.savefig(routeFolder+"/routes.png")
+    
+        plt.clf()
+        sortedEtx = []
+        for l in sorted(numHopMap):
+            sortedEtx.append(numHopMap[l])
+        #labels=(sorted(numHopMap))
+        labels = []
+    
+        weightDistributions = []
+    
+        bins = np.array(range(0,250,1))/float(10)
+        for l in sorted(numHopMap):
+            hw, bw = np.histogram(numHopMap[l], bins=bins)
+            weightDistributions.append(hw)
+            rFrac = int(100*len(numHopMap[l])/float(totRoutes))
+            labels.append(str(l) + "\n(" + str(rFrac) + "%)")
+    
+        plt.xticks(range(len(labels)), labels, fontsize=10)
+        plt.boxplot(sortedEtx)
+        plt.title("route weight Vs route lenght")
+        plt.savefig(routeFolder+"/00-box.png")
+        plt.clf()
+        
+        i = 0
+        for h in weightDistributions:
+            i += 1
+            plt.plot(bins[:-1], h, label="route length "+str(i))
+        plt.title("Distribution of the route weights")
+        plt.xlabel("route weight (ETX)")
+        plt.ylabel("samples")
+        plt.legend(loc="upper right")
+        plt.savefig(routeFolder+"/etxWeights.png")
+        plt.clf()
+    
+        s,b = np.histogram(etxStd, bins=100)
+        es = plt.subplot(1,1,1)
+        plt.title("ETX Standard deviation per route (density/cumulative)")
+        es.plot(b[:len(s)], s, label="ETX STD")
+        cum = es.twinx()
+        cumulative = []
+        partialsum = 0.0
+        for i in s:
+            partialsum += i
+            cumulative.append(partialsum)
+        cum.yaxis.tick_right()
+        cum.yaxis.set_label_position("right")
+        cum.set_ylim([0,1])
+        cum.plot(b[:len(cumulative)], 
+                np.array(cumulative)/partialsum, 
+                color = "green")
+        #cum.set_yscale("log")
+        #cum.set_xscale("log")
+        plt.savefig(routeFolder+"/00-ETX-STD.png")
+        plt.clf()
+    
+    
+        sortedEtxPerCouple = []
+        for l in sorted(etxMap):
+            sortedEtxPerCouple.append(etxMap[l])
+        labels=[int(x) for x in (sorted(etxMap))]
+        plt.xticks(range(len(labels)), labels)
+        plt.boxplot(sortedEtxPerCouple)
+        plt.title("Route weight max - route weight min Vs average lenght")
+        plt.savefig(routeFolder+"/00-ETX-box.png")
+        plt.clf()
+    
+    def getDegreeDistribution(self, net):
+        routeFolder = C.resultDir+net+"/ROUTES"
+        degreeDistribution = defaultdict(float)
+        samples = 0.0
+        for scanId in data.routeData[net]:
+            graph = data.routeData[net][scanId]["Graph"]
+            for node in graph:
+                degreeDistribution[graph.degree(node)] += 1
+                samples += 1
+        for d in degreeDistribution:
+            degreeDistribution[d] /= samples
+        x = degreeDistribution.keys()
+        y = degreeDistribution.values()
+    
+        #thanks stackoverflow!
+        fitfunc = lambda p, x: p[0] * x ** (p[1])
+        errfunc = lambda p, x, y: (y - fitfunc(p, x))
+        
+        out,success = optimize.leastsq(errfunc, 
+                [1,-1],args=(x,y))
+        fittedValue = []
+        for v in x:
+            fittedValue.append(out[0]*(v**out[1]))
+        p = plt.subplot(1,1,1)
+        p.plot(x, degreeDistribution.values(), "ro", x, fittedValue)
+        p.set_xscale("log")
+        p.set_yscale("log")
+        #p.set_ylim(0,1)
+        #plt.ylim([0.0001,0])
+        plt.title("degree frequency graph (m=%s)"%str(out[1])[0:6])
+        plt.savefig(routeFolder+"/degree.png")
+        plt.clf()
+    
+    def diffVectors(self, v1,v2):
+        if len(v1) != len(v2):
+            print >> sys.stderr, "Error, comparing two different arrays", v1, v2
+            sys.exit(1)
+        diff = 0
+        for item in v1:
+            if item not in v2:
+                diff += 1
+        return diff
+    
+    
+    def getCentralityMetrics(self, net):
+        bet = defaultdict(list) 
+        betApproxCloseness = defaultdict(list) 
+        betApproxDegree = defaultdict(list) 
+        betApproxWeightedDegree = defaultdict(list) 
+        singleNodeBetweenness = []
+        singleNodeCloseness = []
+        cl = defaultdict(list)
+        betSol = defaultdict(list)
+        clSol = defaultdict(list)
+        counter = 700 # testing only, limit the number of graphs under analysis
+        for scanId in data.routeData[net]:
+            if counter <= 0:
+                return
+            counter -= 1
+            G = data.routeData[net][scanId]["Graph"]
+            if len(G.nodes()) < 10:
+                print >> sys.stderr, "ERROR, graph has only ", len(G.nodes()), "nodes!"
+                continue
+            # this will make a global graph of all the runs
+            singleNodeBetweenness += nx.betweenness_centrality(G).values()
+            singleNodeCloseness += nx.closeness_centrality(G, distance=True, 
+                    normalized=False).values()
+    
+            # this will call a multi-process routine that will compute the 
+            # betweenness
+            solBet, bestBet, solCl, bestCl, currCache = computeGroupMetrics(G, 
+                    C.maxGroupSize, weighted=True, 
+                    mode="greedy")
+            print solCl, bestCl, solBet
+            # this is used to approximate centrality with degree
+            degreeDict = sorted(G.degree().items(), 
+                    key = lambda x: x[1], reverse=True)
+            highDegreeDict = [ i for i in reversed(degreeDict[:C.maxGroupSize]) ]
+    
+            unsortedNodeWeightedDegreeDict = []
+            # this weights degree with the weight of the links
+            for n in degreeDict:
+                if n[1] == 1:
+                    break
+                nodeWeight = 0.0
+                neighs = G[n[0]]
+                for neigh in neighs:
+                    nodeWeight += 1/G[n[0]][neigh]['weight'] 
+                unsortedNodeWeightedDegreeDict.append((n[0], nodeWeight))
+    
+            nodeWeightedDegreeDict = sorted(unsortedNodeWeightedDegreeDict,
+                    key = lambda x: x[1])[-C.maxGroupSize:]
+    
+            # Big Note: when the betweenness centrality is computed
+            # using the degree to chose the group g, it may not be a monotone 
+            # value anymore. This is due to the fact that when we compute the
+            # centrality, we do not condier routes that start from a node in g.
+            # A node x may have a large number of neighbors but all of them
+            # with a bad quality, so no new routes pass throu x. but if we 
+            # add x to g, we reduce the total number of routes R we use 
+            # in the fraction to compute the average. As a result betweenness may
+            # decrease. Consider the following network as an example of this:
+            #
+            #  1 -- 2 -- 3 -- 4
+            #       |    X
+            #       -- 5--
+            # 
+            # the link marked with X is very bad. At the first iteration g = [2]
+            # do we have 14 routes passing through g and 2 not passing (3->4 and
+            # 4->3). Then g = [2,5]. Since the routes starting from 5 are not 
+            # counted anymore, the fraction is 10/(10+2) < 14/(14+2).
+            # That's why we also use a weighted degree sorting
+            #
+    
+            highClosenessDict = sorted(nx.closeness_centrality(G).items(), 
+                    key = lambda x: x[1])[-C.maxGroupSize:]
+    
+            # compute the betweenness of some group of nodes
+            for gSize in solBet:
+                (b,c) = groupMetricForOneGroup(G, 
+                        [x[0] for x in highClosenessDict][-gSize:], 
+                        currCache)
+                betApproxCloseness[gSize].append(b)
+                (b,c) = groupMetricForOneGroup(G, 
+                        [x[0] for x in highDegreeDict][-gSize:], 
+                        currCache)
+                betApproxDegree[gSize].append(b)
+                (b,c) = groupMetricForOneGroup(G, 
+                        [x[0] for x in nodeWeightedDegreeDict][-gSize:], 
+                        currCache)
+                betApproxWeightedDegree[gSize].append(b)
+                bet[gSize].append(solBet[gSize])
+                cl[gSize].append(solCl[gSize])
+                betSol[gSize].append(bestBet[gSize])
+                clSol[gSize].append(bestCl[gSize])
+    
+        avgBet = {}
+        avgCl = {}
+        avgBetApproxDegree = {}
+        avgBetApproxWeightedDegree = {}
+        avgBetApproxCloseness = {}
+        diffBet = defaultdict(list)
+        diffCl = defaultdict(list)
+        
+        # average the betweenness of multiple samples
+        for gSize in bet:
+            avgBet[gSize] = np.average(bet[gSize])
+            avgCl[gSize] = np.average(cl[gSize])
+            avgBetApproxDegree[gSize] = np.average(betApproxDegree[gSize])
+            avgBetApproxWeightedDegree[gSize] = np.average(
+                    betApproxWeightedDegree[gSize])
+            avgBetApproxCloseness[gSize] = np.average(betApproxCloseness[gSize])
+            prev = []
+            curr = []
+            for sol in betSol[gSize]:
+                prev = [c for c in curr]
+                curr = sol
+                if prev != [] and curr != []:
+                    diffBet[gSize].append(diffVectors(prev, curr))
+            prev = []
+            curr = []
+            for sol in clSol[gSize]:
+                prev = [c for c in curr]
+                curr = sol
+                if prev != [] and curr != []:
+                    diffCl[gSize].append(diffVectors(prev, curr))
+    
+        plt.clf()
+        betG = plt.subplot(1,1,1)
+        betG.set_ylim([0,1])
+        betG.plot(avgBet.keys(), avgBet.values(), color="blue", 
+                label="betweenness")
+        betG.plot(avgBet.keys(), avgBetApproxDegree.values(), color="red", 
+                label="betweenness/degree-approx")
+        betG.plot(avgBet.keys(), avgBetApproxCloseness.values(), color="gray", 
+                label="betweenness/approx-closeness")
+        betG.plot(avgBet.keys(), avgBetApproxWeightedDegree.values(), 
+                color="green", label="betweenness/approx-weighted-degree")
+        betG.legend(loc="lower right")
+        betG.yaxis.grid(color='gray', linestyle='dashed')
+        betG.set_axisbelow(True)
+        plt.ylabel("Betweenness")
+        plt.xlabel("Group size")
+        plt.xticks(avgBet.keys())
+        plt.title("Betweenness centrality - "+net)
+        plt.savefig(centFolder+"/cent-betw-"+net+".png")
+        plt.clf()
+    
+        clG = plt.subplot(1,1,1)
+        clG.set_ylim([1, avgCl.values()[0]])
+        clG.plot(avgCl.keys(), avgCl.values(), color="green", label="closeness")
+        clG.legend(loc="lower right")
+        plt.xlabel("Group size")
+        plt.xticks(avgCl.keys())
+        plt.ylabel("Closeness")
+        plt.title("Closeness centrality - "+net)
+        plt.savefig(centFolder+"/cent-cl-"+net+".png")
+        plt.clf()
+    
+        for size in diffBet:
+            plt.plot(range(len(diffBet[size])), diffBet[size], 
+                    label="group size " + str(size))
+        plt.title(net + ". Variations in the central sets per run, betweenness.")
+        plt.xlabel("run id")
+        plt.ylabel("differing elements from prev run")
+        plt.legend(loc="lower right")
+        plt.savefig(centFolder+"/cent-bet-variation-"+net+".png")
+        plt.clf()
+        for size in diffCl:
+            plt.plot(range(len(diffCl[size])), diffCl[size],
+                    label="group size " + str(size))
+        plt.title(net + ". Variations in the central sets per run, closeness")
+        plt.legend(loc="lower right")
+        plt.savefig(centFolder+"/cent-cl-variation-"+net+".png")
+        plt.clf()
+        
+        h,b = np.histogram(singleNodeBetweenness, bins=100) 
+        totalSamples = sum(h)
+        sb = plt.subplot(1,1,1)
+        sb.yaxis.tick_left()
+        sb.plot(b[1:], h, color="blue")
+        plt.ylabel("# Samples")
+        plt.xlabel("Betweenness")
+    
+        sumSamples = []
+        partialSum = 0.0
+        for v in h:
+            partialSum += v
+            sumSamples.append(partialSum)
+        sbSum=sb.twinx()
+        sbSum.yaxis.tick_right()
+        sbSum.yaxis.set_label_position("right")
+        sbSum.set_ylim([0,1])
+        sbSum.plot(b[1:], (np.array(sumSamples)/totalSamples), 
+                color="red")
+        plt.title("Centrality histogram and normalized integral (all runs)")
+        plt.savefig(centFolder+"/betw-singleNode-"+net+".png")
+    
+        plt.clf()
+        h,b = np.histogram([1/x for x in singleNodeCloseness], bins=100) 
+        totalSamples = sum(h)
+        sb = plt.subplot(1,1,1)
+        sb.yaxis.tick_left()
+        sb.plot(b[1:], h, color="blue")
+        plt.title("Centrality histogram and normalized integral (all runs)")
+        plt.xlabel("Closeness")
+        plt.ylabel("# Samples")
+    
+        sumSamples = []
+        partialSum = 0.0
+        for v in h:
+            partialSum += v
+            sumSamples.append(partialSum)
+        sbSum=sb.twinx()
+        sbSum.yaxis.tick_right()
+        sbSum.yaxis.set_label_position("right")
+        sbSum.set_ylim([0,1])
+        sbSum.plot(b[1:], (np.array(sumSamples)/totalSamples), 
+                color="red")
+        plt.savefig(centFolder+"/clos-singleNode-"+net+".png")
+        plt.clf()
+    
+    
+    
+    def getMPRSets(self, net, mprMode):
+        routeFolder = C.resultDir+net+"/"
+        counter = 700 # testing only, limit the number of graphs under analysis
+        mpr = []
+        for scanId in data.routeData[net]:
+            if counter <= 0:
+                return
+            counter -= 1
+            G = data.routeData[net][scanId]["Graph"]
+            if len(G.nodes()) < 10:
+                print >> sys.stderr, "ERROR, graph has only ", len(G.nodes()),\
+                        "nodes!"
+                continue
+            mprSets = solveMPRProblem(G, mode=mprMode)
+            globalMPRSet = set()
+            for node in mprSets:
+                globalMPRSet |= mprSets[node].pop()
+            mpr.append(globalMPRSet)
+    
+        plt.plot(range(len(mpr)), [len(x) for x in mpr])
+        plt.title("Global MPR set size, mode=\""+mprMode+"\","+net)
+        plt.xlabel("snapshots")
+        plt.ylabel("global MPR set size")
+        plt.savefig(routeFolder+"/mpr-set-size-"+net+"-"+mprMode+".png")
+        plt.clf()
+        mprDiff = []
+        prev = set()
+        curr = set()
+        for mprs in mpr:
+            prev = set([c for c in curr])
+            curr = mprs
+            if prev != set() and curr != set():
+                intersection = prev.intersection(curr)
+                diff = len(prev) - len(intersection) + len(curr) - len(intersection)
+                mprDiff.append(diff)
+    
+        plt.plot(range(len(mprDiff)), mprDiff)
+        plt.title("Global MPR set diff from one sample to the next one,"+\
+                "mode=\""+mprMode+"\","+net)
+        plt.xlabel("snapshots")
+        plt.ylabel("elements that differ")
+        plt.savefig(routeFolder+"/mpr-diff-"+net+"-"+mprMode+".png")
+        plt.clf()
+        
 
 
 
@@ -775,29 +847,11 @@ if  __name__ =='__main__':
 
 
     for net in data.rawData:
-        netEtx = []
-        try:
-            os.makedirs(C.resultDir+net)
-        except OSError:
-            try:
-                os.mkdir(C.resultDir+"/backup/")
-            except:
-                pass
-            now =  datetime.now()
-            newFolder = C.resultDir+"backup/"+net+str(now.month)+\
-                    str(now.day)+str(now.hour)+\
-                    str(now.minute)+str(now.second)
-            shutil.move(C.resultDir+net, newFolder)
-            os.mkdir(C.resultDir+net)
-        for scanId in data.rawData[net]:
-            netEtx += data.rawData[net][scanId]
-        getRouteDistributions(net)
-        #getDegreeDistribution(net)
-        #getETXDistribution(netEtx, len(data.rawData[net]), 1000, 1000, net)
-        #getLinkDistributions(net, 10)
-        #getCentralityMetrics(net)
-        #getMPRSets(net, "RFC")
-        #getMPRSets(net, "lq")
+        parser = dataParser(net)
+        #parser.run()
+        p = Process(target=parser.run)
+        p.start()
+
     f = open(C.resultDir+"/logfile.txt", "w")
     runTime = datetime.now() - startTime - loadTime
     print >> f,  data.printSummary()
