@@ -11,6 +11,8 @@ import networkx as nx
 import matplotlib
 # use the Agg backend, not X, for ssh shells
 matplotlib.use('Agg')
+matplotlib.rcParams['figure.figsize'] = 12, 12 
+matplotlib.rcParams['figure.dpi'] = 1200
 import matplotlib.pyplot as plt
 from scipy import optimize
 import cPickle as pk
@@ -123,12 +125,12 @@ def getDataSummary(ls, data):
         counter = 0
 	# for graz I have one sample every 10 minutes,
         # for ninux/Wien I have one sample every 5 minutes
-	if net == FFGraz:
+	if net == "FFGraz":
 	    networkPenalty = 2
 	else:
 	    networkPenalty = 1
         for scanId in data.scanTree[net]['ETX']:
-            if C.numRuns > 0 and counter > C.numRuns/networkPenalty:
+            if C.numRuns > 0 and counter >= C.numRuns/networkPenalty:
                 break
             queryString = QUERY % scanId[0]
             q = ls.query("sid", "did", "etxv").\
@@ -152,8 +154,7 @@ def getDataSummary(ls, data):
             else:
                 G = nx.Graph()
                 componentSize = 0
-           
-            if len(G.nodes()) < 10:
+            if componentSize < 10:
                 continue
             counter += 1
 
@@ -213,12 +214,12 @@ class dataParser():
         for scanId in data.rawData[self.net]:
             netEtx += data.rawData[self.net][scanId]
         self.getRouteDistributions(self.net)
-        #getDegreeDistribution(self.net)
-        #getETXDistribution(netEtx, len(data.rawDataself.[net]), 1000, 1000, self.net)
-        #getLinkDistributions(self.net, 10)
+        self.getDegreeDistribution(self.net)
+        self.getETXDistribution(netEtx, len(data.rawData[self.net]), 1000, 1000, self.net)
+        self.getLinkDistributions(self.net, 10)
         #getCentralityMetrics(self.net)
-        #getMPRSets(self.net, "RFC")
-        #getMPRSets(self.net, "lq")
+        self.getMPRSets(self.net, "RFC")
+        self.getMPRSets(self.net, "lq")
 
     def getETXDistribution(self, etxList, norm, b, printBins, net ):
         cleanList = [e for e in etxList if e < 10]
@@ -257,7 +258,7 @@ class dataParser():
     
     
     def getLinkDistributions(self, net, numBins):
-        linkFolder = C.resultDir+net+"/LINKS/"
+        linkFolder = C.resultDir+net+"/ETX/"
         try:
             os.mkdir(linkFolder)
         except:
@@ -690,7 +691,7 @@ class dataParser():
     
     
     def getMPRSets(self, net, mprMode):
-        routeFolder = C.resultDir+net+"/"
+        routeFolder = C.resultDir+net+"/ROUTES/"
         counter = 700 # testing only, limit the number of graphs under analysis
         mpr = []
         for scanId in data.routeData[net]:
