@@ -9,6 +9,7 @@ import code
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
+from matplotlib import rcParams
 from scipy import optimize
 import cPickle as pk
 import getopt
@@ -204,12 +205,13 @@ class dataParser():
         for scanId in data.rawData[self.net]:
             netEtx += data.rawData[self.net][scanId]
         self.getRouteDistributions(self.net)
-        #getDegreeDistribution(self.net)
-        #getETXDistribution(netEtx, len(data.rawDataself.[net]), 1000, 1000, self.net)
-        #getLinkDistributions(self.net, 10)
-        #getCentralityMetrics(self.net)
-        #getMPRSets(self.net, "RFC")
-        #getMPRSets(self.net, "lq")
+        #self.getDegreeDistribution(self.net)
+        #self.getETXDistribution(netEtx, len(data.rawData[self.net]), 1000, 1000, self.net)
+        #self.getLinkDistributions(self.net, 10)
+        #self.getCentralityMetrics(self.net)
+        rfcTraffic,wc = self.getMPRSets(self.net, "RFC")
+        lqTraffic,wc = self.getMPRSets(self.net, "lq")
+        print "XXX", wc, lqTraffic, rfcTraffic
 
     def getETXDistribution(self, etxList, norm, b, printBins, net ):
         cleanList = [e for e in etxList if e < 10]
@@ -243,7 +245,7 @@ class dataParser():
             os.mkdir(etxFolder)
         except:
             pass
-        plt.savefig(etxFolder+"ETX-distribution.png")
+        plt.savefig(etxFolder+"ETX-distribution."+C.imageExtension)
         plt.clf()
     
     
@@ -275,7 +277,7 @@ class dataParser():
         plt.title("Average and standard deviation for ETX per link")
         plt.xlabel("link Id")
         plt.ylabel("Average ETX +/- 0.5*std")
-        plt.savefig(linkFolder+"/link-ranking.png")
+        plt.savefig(linkFolder+"/link-ranking."+C.imageExtension)
         plt.clf()
     
     def getRouteDistributions(self, net):
@@ -297,23 +299,41 @@ class dataParser():
                         numHops.append(D[s][d][0])
                         etxList.append(D[s][d][1])
                         numHopMap[D[s][d][0]].append(D[s][d][1])
-                        etxTime[s][d].append([D[s][d][1], D[s][d][0]])
-        etxStd = []
-        etxMap = defaultdict(list)
-        printDists = -1
-        for s in etxTime:
-            for d in etxTime[s]:
-                e = zip(*etxTime[s][d])[0]
-                c = zip(*etxTime[s][d])[1]
-                interval = max(e)-min(e)
-                etxStd.append(interval)
-                etxMap[round(np.average(c))].append(interval)
-                if printDists > 0:
-                    plt.plot(e)
-                    plt.savefig(routeFolder+"/ETXd-"+s+"-"+d+".png")
-                    plt.clf()
-                    printDists -= 1
+                        etxTime[scan][D[s][d][0]].append(D[s][d][1])
+        #etxStd = []
+        #etxMap = defaultdict(list)
+        #printDists = -1
+        #for s in etxTime:
+        #    for d in etxTime[s]:
+        #        e = zip(*etxTime[s][d])[0]
+        #        c = zip(*etxTime[s][d])[1]
+        #        interval = max(e)-min(e)
+        #        etxStd.append(interval)
+        #        etxMap[round(np.average(c))].append(interval)
+        #        if printDists > 0:
+        #            plt.plot(e)
+        #            plt.savefig(routeFolder+"/ETXd-"+s+"-"+d+".eps")
+        #            plt.clf()
+        #            printDists -= 1
     
+        etxAvg = dd1()
+        # scan Ids are incremental with time
+        for scan in sorted(etxTime):
+            for length in etxTime[scan].keys():
+                avgArray = etxTime[scan][length]
+                etxAvg[length].append(np.average(avgArray))
+
+
+        for length in  sorted(etxAvg):
+            plt.plot(etxAvg[length])
+        plt.title("Route Variation, "+net)
+        plt.xlabel("snapshot id")
+        plt.ylabel("ETX weight")
+        plt.savefig("/tmp/"+net+"routeTimeVariation."+C.imageExtension)
+        plt.clf()
+
+        
+        
         maxHops = int(max(numHops))
         maxETX = int(max(etxList))
         hh,bh = np.histogram(numHops, bins=maxHops)
@@ -337,19 +357,20 @@ class dataParser():
             cumulativeE.append(partialsum)
     
         cum.plot(be[:len(cumulativeE)], 
-                np.array(cumulativeE)/partialsum, "--",
-                label = "Cumulative ETX")
+                np.array(cumulativeE)/partialsum, "--")
+                #label = "Cumulative ETX")
         partialsum = 0.0
         totRoutes = 0
         for i in hh:
             partialsum += i
             cumulativeH.append(partialsum)
             totRoutes = partialsum
+        cum.set_xlim([0,25])
         cum.plot(bh[:len(cumulativeH)], 
-                np.array(cumulativeH)/partialsum, "--",
-                label = "Cumulative hopCount")
+                np.array(cumulativeH)/partialsum, "--")
+                #label = "Cumulative hopCount")
         cum.legend(loc="lower right")
-        plt.savefig(routeFolder+"/routes.png")
+        plt.savefig(routeFolder+"/routes."+C.imageExtension)
     
         plt.clf()
         sortedEtx = []
@@ -364,57 +385,63 @@ class dataParser():
         for l in sorted(numHopMap):
             hw, bw = np.histogram(numHopMap[l], bins=bins)
             weightDistributions.append(hw)
-            rFrac = int(100*len(numHopMap[l])/float(totRoutes))
-            labels.append(str(l) + "\n(" + str(rFrac) + "%)")
+            frac = 100*len(numHopMap[l])/float(totRoutes)
+            if int(frac) > 0 :
+                rFrac = str(int(100*len(numHopMap[l])/float(totRoutes)))
+            else:
+                rFrac = "."+str(int(frac*10))
+
+            labels.append(str(l) + "\n" + str(rFrac) + "%")
     
-        plt.xticks(range(len(labels)), labels, fontsize=10)
+        plt.xticks(range(len(labels)), labels, fontsize=14)
         plt.boxplot(sortedEtx)
         plt.title("route weight Vs route lenght")
-        plt.savefig(routeFolder+"/00-box.png")
+        plt.savefig(routeFolder+"/boxplot."+C.imageExtension)
         plt.clf()
         
         i = 0
         for h in weightDistributions:
             i += 1
-            plt.plot(bins[:-1], h, label="route length "+str(i))
+            plt.plot(bins[:-1], h)
+            #plt.plot(bins[:-1], h, label="route length "+str(i))
         plt.title("Distribution of the route weights")
         plt.xlabel("route weight (ETX)")
         plt.ylabel("samples")
         plt.legend(loc="upper right")
-        plt.savefig(routeFolder+"/etxWeights.png")
+        plt.savefig(routeFolder+"/etxWeights."+C.imageExtension)
         plt.clf()
     
-        s,b = np.histogram(etxStd, bins=100)
-        es = plt.subplot(1,1,1)
-        plt.title("ETX Standard deviation per route (density/cumulative)")
-        es.plot(b[:len(s)], s, label="ETX STD")
-        cum = es.twinx()
-        cumulative = []
-        partialsum = 0.0
-        for i in s:
-            partialsum += i
-            cumulative.append(partialsum)
-        cum.yaxis.tick_right()
-        cum.yaxis.set_label_position("right")
-        cum.set_ylim([0,1])
-        cum.plot(b[:len(cumulative)], 
-                np.array(cumulative)/partialsum, 
-                color = "green")
-        #cum.set_yscale("log")
-        #cum.set_xscale("log")
-        plt.savefig(routeFolder+"/00-ETX-STD.png")
-        plt.clf()
+        #s,b = np.histogram(etxStd, bins=100)
+        #es = plt.subplot(1,1,1)
+        #plt.title("ETX Standard deviation per route (density/cumulative)")
+        #es.plot(b[:len(s)], s, label="ETX STD")
+        #cum = es.twinx()
+        #cumulative = []
+        #partialsum = 0.0
+        #for i in s:
+        #    partialsum += i
+        #    cumulative.append(partialsum)
+        #cum.yaxis.tick_right()
+        #cum.yaxis.set_label_position("right")
+        #cum.set_ylim([0,1])
+        #cum.plot(b[:len(cumulative)], 
+        #        np.array(cumulative)/partialsum, 
+        #        color = "green")
+        ##cum.set_yscale("log")
+        ##cum.set_xscale("log")
+        #plt.savefig(routeFolder+"/00-ETX-STD.eps")
+        #plt.clf()
     
     
-        sortedEtxPerCouple = []
-        for l in sorted(etxMap):
-            sortedEtxPerCouple.append(etxMap[l])
-        labels=[int(x) for x in (sorted(etxMap))]
-        plt.xticks(range(len(labels)), labels)
-        plt.boxplot(sortedEtxPerCouple)
-        plt.title("Route weight max - route weight min Vs average lenght")
-        plt.savefig(routeFolder+"/00-ETX-box.png")
-        plt.clf()
+        #sortedEtxPerCouple = []
+        #for l in sorted(etxMap):
+        #    sortedEtxPerCouple.append(etxMap[l])
+        #labels=[int(x) for x in (sorted(etxMap))]
+        #plt.xticks(range(len(labels)), labels)
+        #plt.boxplot(sortedEtxPerCouple)
+        #plt.title("Route weight max - route weight min Vs average lenght")
+        #plt.savefig(routeFolder+"/00-ETX-box.eps")
+        #plt.clf()
     
     def getDegreeDistribution(self, net):
         routeFolder = C.resultDir+net+"/ROUTES"
@@ -446,7 +473,7 @@ class dataParser():
         #p.set_ylim(0,1)
         #plt.ylim([0.0001,0])
         plt.title("degree frequency graph (m=%s)"%str(out[1])[0:6])
-        plt.savefig(routeFolder+"/degree.png")
+        plt.savefig(routeFolder+"/degree."+C.imageExtension)
         plt.clf()
     
     def diffVectors(self, v1,v2):
@@ -574,14 +601,14 @@ class dataParser():
                 prev = [c for c in curr]
                 curr = sol
                 if prev != [] and curr != []:
-                    diffBet[gSize].append(diffVectors(prev, curr))
+                    diffBet[gSize].append(self.diffVectors(prev, curr))
             prev = []
             curr = []
             for sol in clSol[gSize]:
                 prev = [c for c in curr]
                 curr = sol
                 if prev != [] and curr != []:
-                    diffCl[gSize].append(diffVectors(prev, curr))
+                    diffCl[gSize].append(self.diffVectors(prev, curr))
     
         plt.clf()
         betG = plt.subplot(1,1,1)
@@ -601,7 +628,7 @@ class dataParser():
         plt.xlabel("Group size")
         plt.xticks(avgBet.keys())
         plt.title("Betweenness centrality - "+net)
-        plt.savefig(centFolder+"/cent-betw-"+net+".png")
+        plt.savefig(centFolder+"/cent-betw-"+net+"."+C.imageExtension)
         plt.clf()
     
         clG = plt.subplot(1,1,1)
@@ -612,7 +639,7 @@ class dataParser():
         plt.xticks(avgCl.keys())
         plt.ylabel("Closeness")
         plt.title("Closeness centrality - "+net)
-        plt.savefig(centFolder+"/cent-cl-"+net+".png")
+        plt.savefig(centFolder+"/cent-cl-"+net+"."+C.imageExtension)
         plt.clf()
     
         for size in diffBet:
@@ -622,14 +649,14 @@ class dataParser():
         plt.xlabel("run id")
         plt.ylabel("differing elements from prev run")
         plt.legend(loc="lower right")
-        plt.savefig(centFolder+"/cent-bet-variation-"+net+".png")
+        plt.savefig(centFolder+"/cent-bet-variation-"+net+"."+C.imageExtension)
         plt.clf()
         for size in diffCl:
             plt.plot(range(len(diffCl[size])), diffCl[size],
                     label="group size " + str(size))
         plt.title(net + ". Variations in the central sets per run, closeness")
         plt.legend(loc="lower right")
-        plt.savefig(centFolder+"/cent-cl-variation-"+net+".png")
+        plt.savefig(centFolder+"/cent-cl-variation-"+net+"."+C.imageExtension)
         plt.clf()
         
         h,b = np.histogram(singleNodeBetweenness, bins=100) 
@@ -652,7 +679,7 @@ class dataParser():
         sbSum.plot(b[1:], (np.array(sumSamples)/totalSamples), 
                 color="red")
         plt.title("Centrality histogram and normalized integral (all runs)")
-        plt.savefig(centFolder+"/betw-singleNode-"+net+".png")
+        plt.savefig(centFolder+"/betw-singleNode-"+net+"."+C.imageExtension)
     
         plt.clf()
         h,b = np.histogram([1/x for x in singleNodeCloseness], bins=100) 
@@ -675,16 +702,25 @@ class dataParser():
         sbSum.set_ylim([0,1])
         sbSum.plot(b[1:], (np.array(sumSamples)/totalSamples), 
                 color="red")
-        plt.savefig(centFolder+"/clos-singleNode-"+net+".png")
+        plt.savefig(centFolder+"/clos-singleNode-"+net+"."+C.imageExtension)
         plt.clf()
     
     
     
     def getMPRSets(self, net, mprMode):
-        routeFolder = C.resultDir+net+"/"
+        routeFolder = C.resultDir+net+"/ROUTES/"
         counter = 700 # testing only, limit the number of graphs under analysis
         mpr = []
+        IPUDPHEaderSize = 20 + 8 # bytes
+        OLSRMsgHeaderSize = 16 # bytes
+        TCMsgHeaderSize = 4 # bytes
+        SelectorFieldSize = 4 + 4# bytes (IP + quality)
+
+        TCPeriod = 5.0 # seconds
+        signallingTraffic = []
+        worstCaseTraffic = []
         for scanId in data.routeData[net]:
+            selectorSet = defaultdict(set)
             if counter <= 0:
                 return
             counter -= 1
@@ -696,14 +732,31 @@ class dataParser():
             mprSets = solveMPRProblem(G, mode=mprMode)
             globalMPRSet = set()
             for node in mprSets:
+                for m in mprSets[node]:
+                    selectorSet[m].add(node)
                 globalMPRSet |= mprSets[node].pop()
             mpr.append(globalMPRSet)
+
+            TCtraffic = 0
+            for m in selectorSet:
+                TCtraffic += (IPUDPHEaderSize + OLSRMsgHeaderSize + TCMsgHeaderSize +\
+                        len(selectorSet[m])*SelectorFieldSize)/TCPeriod
+            signallingTraffic.append(TCtraffic*len(selectorSet)/len(G.edges()))
+            #signallingTraffic.append(TCtraffic)
+
+            TCtraffic = 0
+            for node in G.nodes():
+                TCtraffic += (IPUDPHEaderSize + OLSRMsgHeaderSize + TCMsgHeaderSize +\
+                        len(G[node])*SelectorFieldSize)/TCPeriod
+            worstCaseTraffic.append(TCtraffic*len(G.nodes())/len(G.edges()))
+            #worstCaseTraffic.append(TCtraffic)
     
         plt.plot(range(len(mpr)), [len(x) for x in mpr])
         plt.title("Global MPR set size, mode=\""+mprMode+"\","+net)
+        plt.ylim([0,150])
         plt.xlabel("snapshots")
         plt.ylabel("global MPR set size")
-        plt.savefig(routeFolder+"/mpr-set-size-"+net+"-"+mprMode+".png")
+        plt.savefig(routeFolder+"/mpr-set-size-"+net+"-"+mprMode+"."+C.imageExtension)
         plt.clf()
         mprDiff = []
         prev = set()
@@ -721,8 +774,12 @@ class dataParser():
                 "mode=\""+mprMode+"\","+net)
         plt.xlabel("snapshots")
         plt.ylabel("elements that differ")
-        plt.savefig(routeFolder+"/mpr-diff-"+net+"-"+mprMode+".png")
+        plt.savefig(routeFolder+"/mpr-diff-"+net+"-"+mprMode+"."+C.imageExtension)
         plt.clf()
+
+        return 8*np.average(signallingTraffic), 8*np.average(worstCaseTraffic)
+
+        
         
 
 
@@ -739,6 +796,7 @@ class configuration:
         self.printInfo = False
         self.maxGroupSize = 5
         self.createTestRun = False
+        self.imageExtension = "png"
     def checkCorrectness(self):
         if self.loadFile != "" and self.loadDb != "":
             print "Error: You can not specify both file and db to load" 
@@ -764,6 +822,7 @@ class configuration:
                 "to less than 40 nodes, testing only)"
         print "-p print pickle file summary"
         print "-r number of runs to consider when saving pickle file"
+        print "-v use vector graphics for output (eps)"
 
 
 ## global configuration class and data
@@ -773,7 +832,7 @@ data = dataObject()
 if  __name__ =='__main__':
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "d:f:r:s:pS:")
+        opts, args = getopt.getopt(sys.argv[1:], "d:f:r:s:pS:v")
     except getopt.GetoptError, err:
         # print help information and exit:
         print >> sys.stderr,  str(err)
@@ -799,10 +858,16 @@ if  __name__ =='__main__':
             C.createTestRun = True
             C.saveDump = v
             continue
+        if option == "-v":
+            C.imageExtension = "eps"
+            continue
     if not C.checkCorrectness():
         sys.exit(1)
 
 
+    
+
+    rcParams.update({'font.size': 20})
     startTime =  datetime.now()
     print "loading", datetime.now()
     print C.loadDb
