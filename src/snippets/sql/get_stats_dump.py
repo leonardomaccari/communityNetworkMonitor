@@ -16,12 +16,13 @@ import getopt
 from datetime import datetime
 import shutil
 from multiprocessing import Process, Queue
+from scipy import stats
 
 try:
     from groupMetrics import computeGroupMetrics, groupMetricForOneGroup
     from mpr import solveMPRProblem
 except ImportError:
-    print >> sys.stderr, "ERROR: You must link into this folder mpr.py, groupMetrics.py and ",
+    print >> sys.stderr, "ERROR: You must link into this folder mpr.py, groupMetrics.py and ",\
     "miscLibs.py from the community network analyser tool"
     sys.exit()
 
@@ -204,7 +205,7 @@ class dataParser():
         netEtx = []
         for scanId in data.rawData[self.net]:
             netEtx += data.rawData[self.net][scanId]
-        self.getRouteDistributions(self.net)
+        #self.getRouteDistributions(self.net)
         #self.getDegreeDistribution(self.net)
         #self.getETXDistribution(netEtx, len(data.rawData[self.net]), 1000, 1000, self.net)
         #self.getLinkDistributions(self.net, 10)
@@ -719,6 +720,7 @@ class dataParser():
         TCPeriod = 5.0 # seconds
         signallingTraffic = []
         worstCaseTraffic = []
+        graphRobustness = {}
         for scanId in data.routeData[net]:
             selectorSet = defaultdict(set)
             if counter <= 0:
@@ -749,8 +751,7 @@ class dataParser():
                 TCtraffic += (IPUDPHEaderSize + OLSRMsgHeaderSize + TCMsgHeaderSize +\
                         len(G[node])*SelectorFieldSize)/TCPeriod
             worstCaseTraffic.append(TCtraffic*len(G.nodes())/len(G.edges()))
-            #worstCaseTraffic.append(TCtraffic)
-    
+            graphRobustness[scanId] = self.computeRobustness(G, tests=10) 
         plt.plot(range(len(mpr)), [len(x) for x in mpr])
         plt.title("Global MPR set size, mode=\""+mprMode+"\","+net)
         plt.ylim([0,150])
@@ -778,6 +779,59 @@ class dataParser():
         plt.clf()
 
         return 8*np.average(signallingTraffic), 8*np.average(worstCaseTraffic)
+
+    def computeRobustness(self, graph, tests=100):
+
+        links = []
+        weights = []
+        for l in graph.edges(data=True):
+            links.append((l[0], l[1])) 
+            weights.append(float(l[2]["weight"]))
+        totWeight = sum(weights)
+        normalizedWeight = [l/totWeight for l in weights]
+        #normalizedWeight = [1.0/len(weights) for l in weights]
+        custDist = stats.rv_discrete(values=(range(len(links)),
+            normalizedWeight))
+
+        mainCSize = defaultdict(list)
+        mainNonCSize = defaultdict(list)
+        nlen = float(len(graph.nodes()))
+        elen = float(len(graph.edges()))
+        for i in range(tests):
+            purgedGraph = graph.copy()
+            purgedLinks = []
+            for k in range(1,int(elen/2)):
+                r = custDist.rvs()
+                if len(purgedLinks) >= elen:
+                    print >> sys.stderr, "Trying to purge",k,"links",\
+                        "from a graph with",elen," total links" 
+                    break
+                while (r in purgedLinks):
+                    r = custDist.rvs()
+                purgedLinks.append(r) 
+                l = links[r]
+                purgedGraph.remove_edge(l[0],l[1])
+                compList =  nx.connected_components(purgedGraph)
+                mainCSize[k].append(len(compList[0])/nlen)
+                mainNonCSize[k].append(
+                        np.average([len(r) for r in compList[1:]])/nlen)
+        return mainCSize, mainNonCSize
+        #    [np.average(mainCSize[k]) for k in sorted(mainCSize.keys())], label="Main C.")
+        #plt.plot(np.array(sorted(mainCSize.keys()))/elen,
+        #    [np.average(mainCSize[k]) for k in sorted(mainCSize.keys())], label="Main C.")
+        ##FIXME add confidence interval
+        ##FIXME do the same for nodes
+
+        ##plt.plot(sorted(mainCSize.keys()),
+        ##    [mainNonCSize[k] for k in sorted(mainNonCSize.keys())],
+        ##    label = "Average minor C.")
+
+        #plt.savefig("/tmp/robustness-"+self.net+"."+C.imageExtension)
+        #plt.clf()
+        
+        
+
+
 
         
         
@@ -865,7 +919,6 @@ if  __name__ =='__main__':
         sys.exit(1)
 
 
-    
 
     rcParams.update({'font.size': 20})
     startTime =  datetime.now()
