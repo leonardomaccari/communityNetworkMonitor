@@ -1,4 +1,4 @@
-#!/usr/bin/python
+	#!/usr/bin/python
 
 import sys
 import os
@@ -554,7 +554,7 @@ class dataParser():
             if counter == 1:
                 firstSolution = bestCl[C.maxGroupSize]
             b,c = groupMetricForOneGroup(G, firstSolution, currCache)
-            solutionVariation.append(solCl[C.maxGroupSize] - c)
+            solutionVariation.append(c - solCl[C.maxGroupSize])
             # this is used to approximate centrality with degree
             degreeDict = sorted(G.degree().items(), 
                     key = lambda x: x[1], reverse=True)
@@ -863,7 +863,7 @@ class dataParser():
         #normalizedWeight = [l/totWeight for l in weights]
         normalizedWeight = [1.0/len(links) for l in links]
         custDist = stats.rv_discrete(values=(range(len(links)),
-            normalizedWeight))
+            normalizedWeight), name="custDist")
 
         mainCSize = defaultdict(list)
         mainNonCSize = defaultdict(list)
