@@ -20,7 +20,7 @@ from scipy import stats
 
 try:
     from groupMetrics import computeGroupMetrics, groupMetricForOneGroup
-    from mpr import solveMPRProblem
+    from mpr import solveMPRProblem, purgeNonMPRLinks
 except ImportError:
     print >> sys.stderr, "ERROR: You must link into this folder mpr.py, groupMetrics.py and ",\
     "miscLibs.py from the community network analyser tool"
@@ -184,10 +184,12 @@ def getDataSummary(ls, data):
 
 class dataParser():
     net = "" 
+    q = None
 
-    def __init__(self, netName):
+
+    def __init__(self, netName, queue):
         self.net = netName
-
+        self.q = queue
     def run(self):
         try:
             os.makedirs(C.resultDir+self.net)
@@ -203,24 +205,29 @@ class dataParser():
             shutil.move(C.resultDir+self.net, newFolder)
             os.mkdir(C.resultDir+self.net)
         netEtx = []
+        retValue = {}
         for scanId in data.rawData[self.net]:
             netEtx += data.rawData[self.net][scanId]
-        #self.getRouteDistributions(self.net)
-        #self.getDegreeDistribution(self.net)
-        #self.getETXDistribution(netEtx, len(data.rawData[self.net]), 1000, 1000, self.net)
-        #self.getLinkDistributions(self.net, 10)
-        #self.getCentralityMetrics(self.net)
-        rfcTraffic,wc = self.getMPRSets(self.net, "RFC")
-        lqTraffic,wc = self.getMPRSets(self.net, "lq")
-        print "XXX", wc, lqTraffic, rfcTraffic
+        self.getRouteDistributions(self.net)
+        self.getDegreeDistribution(self.net)
+        bins = np.array(range(1,1000))/100.0
+        retValue["etx"] = self.getETXDistribution(netEtx, bins)
+        retValue["link"] = self.getLinkDistributions(self.net)
+        retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
+        mprRFC = self.getMPRSets(self.net, "RFC")
+        retValue["MPRRFC"] = mprRFC
+        mprLq = self.getMPRSets(self.net, "lq")
+        retValue["MPRlq"] = mprLq
+        #print "XXX", wc, lqTraffic, rfcTraffic
+        q.put(retValue)
 
-    def getETXDistribution(self, etxList, norm, b, printBins, net ):
+    def getETXDistribution(self, etxList, b):
         cleanList = [e for e in etxList if e < 10]
         h,b = np.histogram(cleanList, bins=b) 
         totalSamples = sum(h)*1.0
         etx = plt.subplot(1,1,1)
         etx.yaxis.tick_left()
-        etx.plot(b[:printBins-1], h[0:printBins-1], color="blue")
+        etx.plot(b[:-1], h, color="blue")
         plt.ylabel("samples")
     
         sumSamples = []
@@ -232,15 +239,20 @@ class dataParser():
         etxSum.yaxis.tick_right()
         etxSum.yaxis.set_label_position("right")
         etxSum.set_ylim([0,1])
-        etxSum.plot(b[:printBins-1], 
-                (np.array(sumSamples)/totalSamples)[0:printBins-1], 
+        etxSum.plot(b[:-1], 
+                (np.array(sumSamples)/totalSamples), 
                 color="red")
-        plt.title("ETX value frequency/cumulative, "+net)
+        plt.title("ETX value frequency/cumulative, "+self.net)
+        
+        ETXDistribution = {}
+        ETXDistribution["x"] = b[:-1]
+        ETXDistribution["y"] = (np.array(sumSamples)/totalSamples)
+            
         #etxSum.set_yscale("log")
         #etxSum.set_xscale("log")
         #etx.set_xscale("log")
         #etx.set_yscale("log")
-        etxFolder = C.resultDir+net+"/ETX/"
+        etxFolder = C.resultDir+self.net+"/ETX/"
     
         try:
             os.mkdir(etxFolder)
@@ -248,9 +260,10 @@ class dataParser():
             pass
         plt.savefig(etxFolder+"ETX-distribution."+C.imageExtension)
         plt.clf()
+        return ETXDistribution
     
     
-    def getLinkDistributions(self, net, numBins):
+    def getLinkDistributions(self, net):
         linkFolder = C.resultDir+net+"/LINKS/"
         try:
             os.mkdir(linkFolder)
@@ -261,25 +274,32 @@ class dataParser():
             for d,vArray in data.linkData[net][s].items():
                 # considering only the links that appear in 
                 # at least 30% of the samples
-                if len(vArray) < 0.3*len(data.dataSummary[net]):
+                if len(vArray) < 0.2*len(data.dataSummary[net]):
                     continue
                 cleanList = [ e for e in vArray if e < 20]
                 avgEtx = np.average(cleanList)
                 avgStd = np.std(cleanList)
-                etxRanking.append([avgEtx, avgEtx+avgStd/2, avgEtx-avgStd/2])
+                etxRanking.append([avgEtx, avgEtx+avgStd/2,\
+                    avgEtx-avgStd/2])
          
-        plt.plot(range(len(etxRanking)), 
-                [e[0] for e in sorted(etxRanking, key = lambda x: x[0])], 
-                range(len(etxRanking)), 
-                [e[1] for e in sorted(etxRanking, key = lambda x: x[0])], 
-                range(len(etxRanking)), 
-                [e[2] for e in sorted(etxRanking, key = lambda x: x[0])])
+        x = range(len(etxRanking))
+        avg = [e[0] for e in sorted(etxRanking, key = lambda x: x[0])]
+        sup = [e[1] for e in sorted(etxRanking, key = lambda x: x[0])]
+        inf = [e[2] for e in sorted(etxRanking, key = lambda x: x[0])]
+
+        plt.plot(x, avg, x, sup, x,  inf)
     
         plt.title("Average and standard deviation for ETX per link")
         plt.xlabel("link Id")
         plt.ylabel("Average ETX +/- 0.5*std")
         plt.savefig(linkFolder+"/link-ranking."+C.imageExtension)
         plt.clf()
+        linkRanking = {}
+        linkRanking["x"] = x
+        linkRanking["avg"] = avg
+        linkRanking["sup"] = sup
+        linkRanking["inf"] = inf
+        return linkRanking
     
     def getRouteDistributions(self, net):
         routeFolder = C.resultDir+net+"/ROUTES"
@@ -468,11 +488,11 @@ class dataParser():
         for v in x:
             fittedValue.append(out[0]*(v**out[1]))
         p = plt.subplot(1,1,1)
-        p.plot(x, degreeDistribution.values(), "ro", x, fittedValue)
+        p.plot(x, degreeDistribution.values(), "ro")#, x, fittedValue)
         p.set_xscale("log")
         p.set_yscale("log")
-        #p.set_ylim(0,1)
-        #plt.ylim([0.0001,0])
+        ##p.set_ylim(0,1)
+        ##plt.ylim([0.0001,0])
         plt.title("degree frequency graph (m=%s)"%str(out[1])[0:6])
         plt.savefig(routeFolder+"/degree."+C.imageExtension)
         plt.clf()
@@ -498,11 +518,15 @@ class dataParser():
         cl = defaultdict(list)
         betSol = defaultdict(list)
         clSol = defaultdict(list)
-        counter = 700 # testing only, limit the number of graphs under analysis
+        counter = 0 # testing only, limit the number of graphs under analysis
+        graphLimit = 3
+        firstSolution = set()
+        solutionVariation = []
         for scanId in data.routeData[net]:
-            if counter <= 0:
+            if counter >= graphLimit:
+                print >> sys.stderr, "Exiting after", graphLimit, "tests"
                 return
-            counter -= 1
+            counter += 1
             G = data.routeData[net][scanId]["Graph"]
             if len(G.nodes()) < 10:
                 print >> sys.stderr, "ERROR, graph has only ", len(G.nodes()), "nodes!"
@@ -517,7 +541,9 @@ class dataParser():
             solBet, bestBet, solCl, bestCl, currCache = computeGroupMetrics(G, 
                     C.maxGroupSize, weighted=True, 
                     mode="greedy")
-            print solCl, bestCl, solBet
+            if counter == 0:
+                firstSolution = solCl
+            solutionVariation.append(groupMetricForOneGroup(G, firstSolution, currCache))
             # this is used to approximate centrality with degree
             degreeDict = sorted(G.degree().items(), 
                     key = lambda x: x[1], reverse=True)
@@ -611,13 +637,19 @@ class dataParser():
                 if prev != [] and curr != []:
                     diffCl[gSize].append(self.diffVectors(prev, curr))
     
+        retValue = defaultdict(dict)
         plt.clf()
         betG = plt.subplot(1,1,1)
         betG.set_ylim([0,1])
         betG.plot(avgBet.keys(), avgBet.values(), color="blue", 
                 label="betweenness")
+        retValue["BET"]["x"] = avgBet.keys()
+        retValue["BET"]["y"] = avgBet.values()
         betG.plot(avgBet.keys(), avgBetApproxDegree.values(), color="red", 
                 label="betweenness/degree-approx")
+        retValue["BETD"]["x"] = avgBet.keys()
+        retValue["BETD"]["y"] = avgBetApproxDegree.values()
+
         betG.plot(avgBet.keys(), avgBetApproxCloseness.values(), color="gray", 
                 label="betweenness/approx-closeness")
         betG.plot(avgBet.keys(), avgBetApproxWeightedDegree.values(), 
@@ -635,6 +667,9 @@ class dataParser():
         clG = plt.subplot(1,1,1)
         clG.set_ylim([1, avgCl.values()[0]])
         clG.plot(avgCl.keys(), avgCl.values(), color="green", label="closeness")
+        retValue["CLOS"]["x"] = avgCl.keys()
+        retValue["CLOS"]["y"] = avgCl.values()
+        retValue["CLOSV"] = solutionVariation
         clG.legend(loc="lower right")
         plt.xlabel("Group size")
         plt.xticks(avgCl.keys())
@@ -705,6 +740,7 @@ class dataParser():
                 color="red")
         plt.savefig(centFolder+"/clos-singleNode-"+net+"."+C.imageExtension)
         plt.clf()
+        return retValue
     
     
     
@@ -720,7 +756,7 @@ class dataParser():
         TCPeriod = 5.0 # seconds
         signallingTraffic = []
         worstCaseTraffic = []
-        graphRobustness = {}
+        mainCSize = defaultdict(list)
         for scanId in data.routeData[net]:
             selectorSet = defaultdict(set)
             if counter <= 0:
@@ -732,6 +768,7 @@ class dataParser():
                         "nodes!"
                 continue
             mprSets = solveMPRProblem(G, mode=mprMode)
+            purgedG = purgeNonMPRLinks(G, mprSets)
             globalMPRSet = set()
             for node in mprSets:
                 for m in mprSets[node]:
@@ -751,8 +788,30 @@ class dataParser():
                 TCtraffic += (IPUDPHEaderSize + OLSRMsgHeaderSize + TCMsgHeaderSize +\
                         len(G[node])*SelectorFieldSize)/TCPeriod
             worstCaseTraffic.append(TCtraffic*len(G.nodes())/len(G.edges()))
-            graphRobustness[scanId] = self.computeRobustness(G, tests=10) 
-        plt.plot(range(len(mpr)), [len(x) for x in mpr])
+
+            m, nm = self.computeRobustness(purgedG, tests=10)
+
+            relativeMainCSize = defaultdict(list)
+            for k in m:
+                mainCSize[k].append(m[k])
+                relativeMainCSize[float(k)/len(globalMPRSet)].append(m[k])
+        retValue = defaultdict(dict)
+
+        # FIXME make this threshold dynamic. -r is needed
+        tailCut = 5
+        retValue["ROBUSTNESS"]["x"] = relativeMainCSize.keys()[:-tailCut]
+        retValue["ROBUSTNESS"]["y"] = [np.average(relativeMainCSize[key]) for key in \
+                relativeMainCSize.keys()[:-tailCut]]
+
+        plt.plot(retValue["ROBUSTNESS"]["x"], retValue["ROBUSTNESS"]["y"])
+        plt.title("Average robustness: "+self.net)
+        plt.xlabel("Number of failed links")
+        plt.savefig(routeFolder+"/robustness-"+mprMode+"."+C.imageExtension)
+        plt.clf()
+
+        retValue["MPR"]["x"] = range(len(mpr))
+        retValue["MPR"]["y"] = [len(x) for x in mpr]
+        plt.plot(retValue["MPR"]["x"], retValue["MPR"]["y"])
         plt.title("Global MPR set size, mode=\""+mprMode+"\","+net)
         plt.ylim([0,150])
         plt.xlabel("snapshots")
@@ -778,7 +837,9 @@ class dataParser():
         plt.savefig(routeFolder+"/mpr-diff-"+net+"-"+mprMode+"."+C.imageExtension)
         plt.clf()
 
-        return 8*np.average(signallingTraffic), 8*np.average(worstCaseTraffic)
+        retValue["STRAFFIC"] = 8*np.average(signallingTraffic)
+        retValue["WTRAFFIC"] = 8*np.average(signallingTraffic)
+        return retValue
 
     def computeRobustness(self, graph, tests=100):
 
@@ -786,10 +847,10 @@ class dataParser():
         weights = []
         for l in graph.edges(data=True):
             links.append((l[0], l[1])) 
-            weights.append(float(l[2]["weight"]))
-        totWeight = sum(weights)
-        normalizedWeight = [l/totWeight for l in weights]
-        #normalizedWeight = [1.0/len(weights) for l in weights]
+            #weights.append(float(l[2]["weight"]))
+        #totWeight = sum(weights)
+        #normalizedWeight = [l/totWeight for l in weights]
+        normalizedWeight = [1.0/len(links) for l in links]
         custDist = stats.rv_discrete(values=(range(len(links)),
             normalizedWeight))
 
@@ -815,7 +876,10 @@ class dataParser():
                 mainCSize[k].append(len(compList[0])/nlen)
                 mainNonCSize[k].append(
                         np.average([len(r) for r in compList[1:]])/nlen)
-        return mainCSize, mainNonCSize
+        mainCSizeAvg = {}
+        for k, tests in mainCSize.items():
+            mainCSizeAvg[k] = np.average(tests)
+        return mainCSizeAvg, mainNonCSize
         #    [np.average(mainCSize[k]) for k in sorted(mainCSize.keys())], label="Main C.")
         #plt.plot(np.array(sorted(mainCSize.keys()))/elen,
         #    [np.average(mainCSize[k]) for k in sorted(mainCSize.keys())], label="Main C.")
@@ -829,6 +893,143 @@ class dataParser():
         #plt.savefig("/tmp/robustness-"+self.net+"."+C.imageExtension)
         #plt.clf()
         
+
+class dataPlot:
+
+    def __init__(self, C=None):
+        self.x = []
+        self.y = []
+        self.title = ""
+        self.xAxisLabel = ""
+        self.yAxisLabel = ""
+        self.outFile = ""
+        self.key = []
+        self.legendPosition = "center right"
+        if C == None:
+            self.fileType = ".png"
+        else:
+            self.fileType = "."+C.imageExtension
+
+    def plotData(self):
+        dataDimension = 0
+        ax = plt.subplot(111)
+        for y in self.y:
+            l = self.y[dataDimension][1]
+            v = self.y[dataDimension][0]
+            if l != "": 
+                ax.plot(self.x[dataDimension],
+                    v, label=l)
+            else :
+                ax.plot(self.x[dataDimension], v)
+            dataDimension += 1
+        plt.title(self.title)
+        plt.xlabel(self.xAxisLabel)
+        plt.ylabel(self.yAxisLabel)
+        if self.legendPosition == "aside":
+            box = ax.get_position()
+            ax.set_position([box.x0, box.y0,
+                                 box.width * 0.8, box.height])
+            ax.legend(loc="center left", fancybox=True, 
+                bbox_to_anchor=(1, 0.5), shadow=True, 
+                prop={'size':12})
+        else: 
+            plt.legend(loc=self.legendPosition, fancybox=True, 
+                shadow=True)
+        plt.savefig(self.outFile+self.fileType)
+        plt.clf()
+
+
+def extractDataSeries(parsers):
+
+    etx = dataPlot(C)
+    link = dataPlot(C)
+    mprLq = dataPlot(C)
+    mprRFC = dataPlot(C)
+    betweenness = dataPlot(C)
+    closeness = dataPlot(C)
+    mprRobustness = dataPlot(C)
+    closenessV = dataPlot(C)
+    retValues = defaultdict(dict)
+    for (n,p,v) in parsers:
+        retValues[n] = v.get()
+
+    for n,v in retValues.items():
+        etx.y.append((v["etx"]["y"], n) )
+        etx.x.append(v["etx"]["x"])
+        etx.title = "ETX ECDF"
+        etx.outFile = "/tmp/etx"
+        etx.xAxisLabel = "ETX"
+        etx.yAxisLabel = ""
+
+        link.x.append(v["link"]["x"])
+        link.x.append(v["link"]["x"])
+        link.x.append(v["link"]["x"])
+        link.y.append((v["link"]["avg"], n))
+        link.y.append((v["link"]["sup"], ""))
+        link.y.append((v["link"]["inf"], ""))
+        link.outFile = "/tmp/link"
+        link.title  = "average ETX per link +/- stddev"
+        link.xAxisLabel = "link"
+        link.yAxisLabel = "ETX"
+        link.legendPosition = "upper left"
+
+        mprRFC.x.append(v["MPRRFC"]["MPR"]["x"])
+        mprRFC.y.append((v["MPRRFC"]["MPR"]["y"], n))
+        mprRFC.title = "Size of the global MPR set (RFC)"
+        mprRFC.outFile = "/tmp/mpr-rfc"
+        mprRFC.xAxisLabel = "snapshot"
+        link.legendPosition = "lower right"
+
+        mprLq.x.append(v["MPRlq"]["MPR"]["x"])
+        mprLq.y.append((v["MPRlq"]["MPR"]["y"], n))
+        mprLq.title = "Size of the global MPR set (lq)"
+        mprLq.outFile = "/tmp/mpr-lq"
+        mprLq.xAxisLabel = "snapshot"
+        link.legendPosition = "lower right"
+
+        mprRobustness.x.append(v["MPRRFC"]["ROBUSTNESS"]["x"])
+        mprRobustness.y.append((v["MPRRFC"]["ROBUSTNESS"]["y"], n+"-RFC"))
+        mprRobustness.x.append(v["MPRlq"]["ROBUSTNESS"]["x"])
+        mprRobustness.y.append((v["MPRlq"]["ROBUSTNESS"]["y"], n+"-lq"))
+        mprRobustness.title = "Robustness metric of the MPR sub-graph"
+        mprRobustness.outFile = "/tmp/robustness"
+        mprRobustness.xAxisLabel = "Broken links"
+        mprRobustness.yAxisLabel = "Robustness"
+        mprRobustness.legendPosition = "aside"
+
+        closeness.x.append(v["CENTRALITY"]["CLOS"]["x"])
+        closeness.y.append((v["CENTRALITY"]["CLOS"]["y"], n))
+        closeness.title = "Group closeness centrality"
+        closeness.outFile = "/tmp/closeness"
+        closeness.xAxisLabel = "Group Size"
+        closeness.yAxisLabel = "Group Closeness"
+        closeness.legendPosition = "lower center"
+
+        closenessV.x.append(v["CENTRALITY"]["CLOSV"]["x"])
+        closenessV.y.append((v["CENTRALITY"]["CLOSV"]["y"], n))
+        closenessV.title = "Group closeness centrality variation"
+        closenessV.outFile = "/tmp/closeness-variation"
+        closenessV.xAxisLabel = "snapshot"
+        closenessV.yAxisLabel = "Group Closeness (5 nodes)"
+        closenessV.legendPosition = "lower center"
+
+        betweenness.x.append(v["CENTRALITY"]["BET"]["x"])
+        betweenness.y.append((v["CENTRALITY"]["BET"]["y"], n))
+        betweenness.x.append(v["CENTRALITY"]["BETD"]["x"])
+        betweenness.y.append((v["CENTRALITY"]["BETD"]["y"], n+"'"))
+        betweenness.title = "Group betweenness centrality"
+        betweenness.outFile = "/tmp/betweenness"
+        betweenness.xAxisLabel = "Group Size"
+        betweenness.yAxisLabel = "Group Betweenness"
+        betweenness.legendPosition = "aside"
+
+    etx.plotData()
+    link.plotData()
+    mprLq.plotData()
+    mprRFC.plotData()
+    mprRobustness.plotData()
+    closeness.plotData()
+    betweenness.plotData()
         
 
 
@@ -964,11 +1165,18 @@ if  __name__ =='__main__':
         os.mkdir(C.resultDir+"/CENTRALITY")
 
 
+    parsers = []
     for net in data.rawData:
-        parser = dataParser(net)
-        #parser.run()
+        q = Queue()
+        parser = dataParser(net, q)
         p = Process(target=parser.run)
+        parsers.append((net, p, q))
         p.start()
+
+    for (n,p,q) in parsers:
+        p.join()
+
+    extractDataSeries(parsers)
 
     f = open(C.resultDir+"/logfile.txt", "w")
     runTime = datetime.now() - startTime - loadTime
