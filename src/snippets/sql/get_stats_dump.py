@@ -638,6 +638,7 @@ class dataParser():
                 if prev != [] and curr != []:
                     diffCl[gSize].append(self.diffVectors(prev, curr))
     
+        centFolder = C.resultDir+"/CENTRALITY"
         retValue = defaultdict(dict)
         plt.clf()
         betG = plt.subplot(1,1,1)
@@ -759,6 +760,7 @@ class dataParser():
         signallingTraffic = []
         worstCaseTraffic = []
         mainCSize = defaultdict(list)
+        relativeMainCSize = defaultdict(list)
         for scanId in data.routeData[net]:
             selectorSet = defaultdict(set)
             if counter <= 0:
@@ -793,7 +795,6 @@ class dataParser():
 
             m, nm = self.computeRobustness(purgedG, tests=10)
 
-            relativeMainCSize = defaultdict(list)
             for k in m:
                 mainCSize[k].append(m[k])
                 relativeMainCSize[float(k)/len(globalMPRSet)].append(m[k])
@@ -801,9 +802,9 @@ class dataParser():
 
         # FIXME make this threshold dynamic. -r is needed
         tailCut = 5
-        retValue["ROBUSTNESS"]["x"] = relativeMainCSize.keys()[:-tailCut]
+        retValue["ROBUSTNESS"]["x"] = sorted(relativeMainCSize.keys()[:-tailCut])
         retValue["ROBUSTNESS"]["y"] = [np.average(relativeMainCSize[key]) for key in \
-                relativeMainCSize.keys()[:-tailCut]]
+                retValue["ROBUSTNESS"]["x"]]
 
         plt.plot(retValue["ROBUSTNESS"]["x"], retValue["ROBUSTNESS"]["y"])
         plt.title("Average robustness: "+self.net)
@@ -912,7 +913,7 @@ class dataPlot:
         else:
             self.fileType = "."+C.imageExtension
 
-    def plotData(self):
+    def plotData(self, style = "-"):
         dataDimension = 0
         ax = plt.subplot(111)
         for y in self.y:
@@ -920,9 +921,9 @@ class dataPlot:
             v = self.y[dataDimension][0]
             if l != "": 
                 ax.plot(self.x[dataDimension],
-                    v, label=l)
+                    v, style, label=l)
             else :
-                ax.plot(self.x[dataDimension], v)
+                ax.plot(self.x[dataDimension], v, style)
             dataDimension += 1
         plt.title(self.title)
         plt.xlabel(self.xAxisLabel)
@@ -953,6 +954,7 @@ def extractDataSeries(parsers):
     mprRobustness = dataPlot(C)
     closenessV = dataPlot(C)
     retValues = defaultdict(dict)
+    comparisonFolder = C.resultDir+"/COMPARISON/"
     for (n,p,v) in parsers:
         retValues[n] = v.get()
 
@@ -970,7 +972,7 @@ def extractDataSeries(parsers):
         link.y.append((v["link"]["avg"], n))
         link.y.append((v["link"]["sup"], ""))
         link.y.append((v["link"]["inf"], ""))
-        link.outFile = "/tmp/link"
+        link.outFile = comparisonFolder+"link"
         link.title  = "average ETX per link +/- stddev"
         link.xAxisLabel = "link"
         link.yAxisLabel = "ETX"
@@ -979,14 +981,14 @@ def extractDataSeries(parsers):
         mprRFC.x.append(v["MPRRFC"]["MPR"]["x"])
         mprRFC.y.append((v["MPRRFC"]["MPR"]["y"], n))
         mprRFC.title = "Size of the global MPR set (RFC)"
-        mprRFC.outFile = "/tmp/mpr-rfc"
+        mprRFC.outFile = comparisonFolder+"mpr-rfc"
         mprRFC.xAxisLabel = "snapshot"
         link.legendPosition = "lower right"
 
         mprLq.x.append(v["MPRlq"]["MPR"]["x"])
         mprLq.y.append((v["MPRlq"]["MPR"]["y"], n))
         mprLq.title = "Size of the global MPR set (lq)"
-        mprLq.outFile = "/tmp/mpr-lq"
+        mprLq.outFile = comparisonFolder+"mpr-lq"
         mprLq.xAxisLabel = "snapshot"
         link.legendPosition = "lower right"
 
@@ -995,7 +997,7 @@ def extractDataSeries(parsers):
         mprRobustness.x.append(v["MPRlq"]["ROBUSTNESS"]["x"])
         mprRobustness.y.append((v["MPRlq"]["ROBUSTNESS"]["y"], n+"-lq"))
         mprRobustness.title = "Robustness metric of the MPR sub-graph"
-        mprRobustness.outFile = "/tmp/robustness"
+        mprRobustness.outFile = comparisonFolder+"robustness"
         mprRobustness.xAxisLabel = "Broken links"
         mprRobustness.yAxisLabel = "Robustness"
         mprRobustness.legendPosition = "aside"
@@ -1003,7 +1005,7 @@ def extractDataSeries(parsers):
         closeness.x.append(v["CENTRALITY"]["CLOS"]["x"])
         closeness.y.append((v["CENTRALITY"]["CLOS"]["y"], n))
         closeness.title = "Group closeness centrality"
-        closeness.outFile = "/tmp/closeness"
+        closeness.outFile = comparisonFolder+"closeness"
         closeness.xAxisLabel = "Group Size"
         closeness.yAxisLabel = "Group Closeness"
         closeness.legendPosition = "upper right"
@@ -1011,7 +1013,7 @@ def extractDataSeries(parsers):
         closenessV.x.append(range(len(v["CENTRALITY"]["CLOSV"])))
         closenessV.y.append((v["CENTRALITY"]["CLOSV"], n))
         closenessV.title = "Group closeness centrality variation"
-        closenessV.outFile = "/tmp/closeness-variation"
+        closenessV.outFile = comparisonFolder+"closeness-variation"
         closenessV.xAxisLabel = "snapshot"
         closenessV.yAxisLabel = "Group Closeness (5 nodes)"
         closenessV.legendPosition = "lower center"
@@ -1019,7 +1021,7 @@ def extractDataSeries(parsers):
         betweenness.x.append(v["CENTRALITY"]["BET"]["x"])
         betweenness.y.append((v["CENTRALITY"]["BET"]["y"], n))
         betweenness.title = "Group betweenness centrality"
-        betweenness.outFile = "/tmp/betweenness"
+        betweenness.outFile = comparisonFolder+"betweenness"
         betweenness.xAxisLabel = "Group Size"
         betweenness.yAxisLabel = "Group Betweenness"
         betweenness.legendPosition = "aside"
@@ -1027,7 +1029,7 @@ def extractDataSeries(parsers):
         betweennessD.x.append(v["CENTRALITY"]["BETD"]["x"])
         betweennessD.y.append((v["CENTRALITY"]["BETD"]["y"], n))
         betweennessD.title = "Group betweenness (highest degree)"
-        betweennessD.outFile = "/tmp/betweenness-estimation"
+        betweennessD.outFile = comparisonFolder+"betweenness-estimation"
         betweennessD.xAxisLabel = "Group Size"
         betweennessD.yAxisLabel = "difference from the best group Betweenness (%)"
         betweennessD.legendPosition = "upper right"
@@ -1036,7 +1038,7 @@ def extractDataSeries(parsers):
     link.plotData()
     mprLq.plotData()
     mprRFC.plotData()
-    mprRobustness.plotData()
+    mprRobustness.plotData(style="o")
     closeness.plotData()
     betweenness.plotData()
     betweennessD.plotData()
@@ -1089,6 +1091,23 @@ class configuration:
         print "-p print pickle file summary"
         print "-r number of runs to consider when saving pickle file"
         print "-v use vector graphics for output (eps)"
+
+def createFolder(folder):
+    f = C.resultDir+"/"+folder
+    try:
+        os.makedirs(f)
+    except OSError:
+        try:
+            os.mkdir(C.resultDir+"/backup/")
+        except:
+            pass
+        now =  datetime.now()
+        newFolder = C.resultDir+"backup/"+folder+str(now.month)+\
+                str(now.day)+str(now.hour)+\
+                str(now.minute)+str(now.second)
+        shutil.move(C.resultDir+"/"+folder, newFolder)
+        os.mkdir(C.resultDir+"/"+folder)
+
 
 
 ## global configuration class and data
@@ -1160,22 +1179,8 @@ if  __name__ =='__main__':
     logString = ""
     print "loaded", datetime.now()
 
-    centFolder = C.resultDir+"/CENTRALITY"
-    try:
-        os.makedirs(centFolder)
-    except OSError:
-        try:
-            os.mkdir(C.resultDir+"/backup/")
-        except:
-            pass
-        now =  datetime.now()
-        newFolder = C.resultDir+"backup/CENTRALITY"+str(now.month)+\
-                str(now.day)+str(now.hour)+\
-                str(now.minute)+str(now.second)
-        shutil.move(C.resultDir+"/CENTRALITY", newFolder)
-        os.mkdir(C.resultDir+"/CENTRALITY")
-
-
+    createFolder("CENTRALITY")
+    createFolder("COMPARISON")
     parsers = []
     for net in data.rawData:
         q = Queue()
