@@ -649,7 +649,8 @@ class dataParser():
         betG.plot(avgBet.keys(), avgBetApproxDegree.values(), color="red", 
                 label="betweenness/degree-approx")
         retValue["BETD"]["x"] = avgBet.keys()
-        retValue["BETD"]["y"] = avgBetApproxDegree.values()
+        retValue["BETD"]["y"] = 100*(np.array(avgBet.values()) - \
+            np.array(avgBetApproxDegree.values()))/np.array(avgBet.values())
 
         betG.plot(avgBet.keys(), avgBetApproxCloseness.values(), color="gray", 
                 label="betweenness/approx-closeness")
@@ -947,6 +948,7 @@ def extractDataSeries(parsers):
     mprLq = dataPlot(C)
     mprRFC = dataPlot(C)
     betweenness = dataPlot(C)
+    betweennessD = dataPlot(C)
     closeness = dataPlot(C)
     mprRobustness = dataPlot(C)
     closenessV = dataPlot(C)
@@ -1004,7 +1006,7 @@ def extractDataSeries(parsers):
         closeness.outFile = "/tmp/closeness"
         closeness.xAxisLabel = "Group Size"
         closeness.yAxisLabel = "Group Closeness"
-        closeness.legendPosition = "lower center"
+        closeness.legendPosition = "upper right"
 
         closenessV.x.append(range(len(v["CENTRALITY"]["CLOSV"])))
         closenessV.y.append((v["CENTRALITY"]["CLOSV"], n))
@@ -1016,13 +1018,19 @@ def extractDataSeries(parsers):
 
         betweenness.x.append(v["CENTRALITY"]["BET"]["x"])
         betweenness.y.append((v["CENTRALITY"]["BET"]["y"], n))
-        betweenness.x.append(v["CENTRALITY"]["BETD"]["x"])
-        betweenness.y.append((v["CENTRALITY"]["BETD"]["y"], n+"'"))
         betweenness.title = "Group betweenness centrality"
         betweenness.outFile = "/tmp/betweenness"
         betweenness.xAxisLabel = "Group Size"
         betweenness.yAxisLabel = "Group Betweenness"
         betweenness.legendPosition = "aside"
+
+        betweennessD.x.append(v["CENTRALITY"]["BETD"]["x"])
+        betweennessD.y.append((v["CENTRALITY"]["BETD"]["y"], n))
+        betweennessD.title = "Group betweenness (highest degree)"
+        betweennessD.outFile = "/tmp/betweenness-estimation"
+        betweennessD.xAxisLabel = "Group Size"
+        betweennessD.yAxisLabel = "difference from the best group Betweenness (%)"
+        betweennessD.legendPosition = "upper right"
 
     etx.plotData()
     link.plotData()
@@ -1031,6 +1039,7 @@ def extractDataSeries(parsers):
     mprRobustness.plotData()
     closeness.plotData()
     betweenness.plotData()
+    betweennessD.plotData()
     closenessV.plotData()
         
 
