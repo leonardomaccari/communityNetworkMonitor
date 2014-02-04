@@ -519,13 +519,13 @@ class dataParser():
         betSol = defaultdict(list)
         clSol = defaultdict(list)
         counter = 0 # testing only, limit the number of graphs under analysis
-        graphLimit = 3
+        graphLimit = 10
         firstSolution = set()
         solutionVariation = []
         for scanId in data.routeData[net]:
             if counter >= graphLimit:
                 print >> sys.stderr, "Exiting after", graphLimit, "tests"
-                return
+                break
             counter += 1
             G = data.routeData[net][scanId]["Graph"]
             if len(G.nodes()) < 10:
@@ -541,9 +541,10 @@ class dataParser():
             solBet, bestBet, solCl, bestCl, currCache = computeGroupMetrics(G, 
                     C.maxGroupSize, weighted=True, 
                     mode="greedy")
-            if counter == 0:
-                firstSolution = solCl
-            solutionVariation.append(groupMetricForOneGroup(G, firstSolution, currCache))
+            if counter == 1:
+                firstSolution = bestCl[C.maxGroupSize]
+            b,c = groupMetricForOneGroup(G, firstSolution, currCache)
+            solutionVariation.append(solCl[C.maxGroupSize] - c)
             # this is used to approximate centrality with degree
             degreeDict = sorted(G.degree().items(), 
                     key = lambda x: x[1], reverse=True)
@@ -1005,8 +1006,8 @@ def extractDataSeries(parsers):
         closeness.yAxisLabel = "Group Closeness"
         closeness.legendPosition = "lower center"
 
-        closenessV.x.append(v["CENTRALITY"]["CLOSV"]["x"])
-        closenessV.y.append((v["CENTRALITY"]["CLOSV"]["y"], n))
+        closenessV.x.append(range(len(v["CENTRALITY"]["CLOSV"])))
+        closenessV.y.append((v["CENTRALITY"]["CLOSV"], n))
         closenessV.title = "Group closeness centrality variation"
         closenessV.outFile = "/tmp/closeness-variation"
         closenessV.xAxisLabel = "snapshot"
@@ -1030,6 +1031,7 @@ def extractDataSeries(parsers):
     mprRobustness.plotData()
     closeness.plotData()
     betweenness.plotData()
+    closenessV.plotData()
         
 
 
