@@ -888,7 +888,12 @@ class dataParser():
                 purgedGraph.remove_edge(l[0],l[1])
                 compList =  nx.connected_components(purgedGraph)
                 mainCSize[k].append(len(compList[0])/nlen)
-                mainNonCSize[k].append(
+		
+                compSizes = [len(r) for r in compList[1:]]
+                if len(compSizes) == 0:
+                    mainNonCSize[k].append(0)
+                else:
+		    mainNonCSize[k].append(
                         np.average([len(r) for r in compList[1:]])/nlen)
         mainCSizeAvg = {}
         for k, tests in mainCSize.items():
