@@ -1,4 +1,4 @@
-	#!/usr/bin/python
+#!/usr/bin/python
 
 import sys
 import os
@@ -223,13 +223,14 @@ class dataParser():
         bins = np.array(range(1,1000))/100.0
         retValue["etx"] = self.getETXDistribution(netEtx, bins)
         retValue["link"] = self.getLinkDistributions(self.net)
-        retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
+        #retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
         mprRFC = self.getMPRSets(self.net, "RFC")
         retValue["MPRRFC"] = mprRFC
         mprLq = self.getMPRSets(self.net, "lq")
         retValue["MPRlq"] = mprLq
         #print "XXX", wc, lqTraffic, rfcTraffic
         q.put(retValue)
+	
 
     def getETXDistribution(self, etxList, b):
         cleanList = [e for e in etxList if e < 10]
@@ -952,7 +953,7 @@ class dataPlot:
         plt.clf()
 
 
-def extractDataSeries(parsers):
+def extractDataSeries(retValues):
 
     etx = dataPlot(C)
     link = dataPlot(C)
@@ -963,12 +964,10 @@ def extractDataSeries(parsers):
     closeness = dataPlot(C)
     mprRobustness = dataPlot(C)
     closenessV = dataPlot(C)
-    retValues = defaultdict(dict)
     comparisonFolder = C.resultDir+"/COMPARISON/"
-    for (n,p,v) in parsers:
-        retValues[n] = v.get()
 
     for n,v in retValues.items():
+	
         etx.y.append((v["etx"]["y"], n) )
         etx.x.append(v["etx"]["x"])
         etx.title = "ETX ECDF"
@@ -1012,47 +1011,47 @@ def extractDataSeries(parsers):
         mprRobustness.yAxisLabel = "Robustness"
         mprRobustness.legendPosition = "aside"
 
-        closeness.x.append(v["CENTRALITY"]["CLOS"]["x"])
-        closeness.y.append((v["CENTRALITY"]["CLOS"]["y"], n))
-        closeness.title = "Group closeness centrality"
-        closeness.outFile = comparisonFolder+"closeness"
-        closeness.xAxisLabel = "Group Size"
-        closeness.yAxisLabel = "Group Closeness"
-        closeness.legendPosition = "upper right"
+        #closeness.x.append(v["CENTRALITY"]["CLOS"]["x"])
+        #closeness.y.append((v["CENTRALITY"]["CLOS"]["y"], n))
+        #closeness.title = "Group closeness centrality"
+        #closeness.outFile = comparisonFolder+"closeness"
+        #closeness.xAxisLabel = "Group Size"
+        #closeness.yAxisLabel = "Group Closeness"
+        #closeness.legendPosition = "upper right"
 
-        closenessV.x.append(range(len(v["CENTRALITY"]["CLOSV"])))
-        closenessV.y.append((v["CENTRALITY"]["CLOSV"], n))
-        closenessV.title = "Group closeness centrality variation"
-        closenessV.outFile = comparisonFolder+"closeness-variation"
-        closenessV.xAxisLabel = "snapshot"
-        closenessV.yAxisLabel = "Group Closeness (5 nodes)"
-        closenessV.legendPosition = "lower center"
+        #closenessV.x.append(range(len(v["CENTRALITY"]["CLOSV"])))
+        #closenessV.y.append((v["CENTRALITY"]["CLOSV"], n))
+        #closenessV.title = "Group closeness centrality variation"
+        #closenessV.outFile = comparisonFolder+"closeness-variation"
+        #closenessV.xAxisLabel = "snapshot"
+        #closenessV.yAxisLabel = "Group Closeness (5 nodes)"
+        #closenessV.legendPosition = "lower center"
 
-        betweenness.x.append(v["CENTRALITY"]["BET"]["x"])
-        betweenness.y.append((v["CENTRALITY"]["BET"]["y"], n))
-        betweenness.title = "Group betweenness centrality"
-        betweenness.outFile = comparisonFolder+"betweenness"
-        betweenness.xAxisLabel = "Group Size"
-        betweenness.yAxisLabel = "Group Betweenness"
-        betweenness.legendPosition = "aside"
+        #betweenness.x.append(v["CENTRALITY"]["BET"]["x"])
+        #betweenness.y.append((v["CENTRALITY"]["BET"]["y"], n))
+        #betweenness.title = "Group betweenness centrality"
+        #betweenness.outFile = comparisonFolder+"betweenness"
+        #betweenness.xAxisLabel = "Group Size"
+        #betweenness.yAxisLabel = "Group Betweenness"
+        #betweenness.legendPosition = "aside"
 
-        betweennessD.x.append(v["CENTRALITY"]["BETD"]["x"])
-        betweennessD.y.append((v["CENTRALITY"]["BETD"]["y"], n))
-        betweennessD.title = "Group betweenness (highest degree)"
-        betweennessD.outFile = comparisonFolder+"betweenness-estimation"
-        betweennessD.xAxisLabel = "Group Size"
-        betweennessD.yAxisLabel = "difference from the best group Betweenness (%)"
-        betweennessD.legendPosition = "upper right"
+        #betweennessD.x.append(v["CENTRALITY"]["BETD"]["x"])
+        #betweennessD.y.append((v["CENTRALITY"]["BETD"]["y"], n))
+        #betweennessD.title = "Group betweenness (highest degree)"
+        #betweennessD.outFile = comparisonFolder+"betweenness-estimation"
+        #betweennessD.xAxisLabel = "Group Size"
+        #betweennessD.yAxisLabel = "difference from the best group Betweenness (%)"
+        #betweennessD.legendPosition = "upper right"
 
     etx.plotData()
     link.plotData()
     mprLq.plotData()
     mprRFC.plotData()
     mprRobustness.plotData(style="o")
-    closeness.plotData()
-    betweenness.plotData()
-    betweennessD.plotData()
-    closenessV.plotData()
+    #closeness.plotData()
+    #betweenness.plotData()
+    #betweennessD.plotData()
+    #closenessV.plotData()
         
 
 
@@ -1199,10 +1198,23 @@ if  __name__ =='__main__':
         parsers.append((net, p, q))
         p.start()
 
-    for (n,p,q) in parsers:
-        p.join()
-
-    extractDataSeries(parsers)
+    retValues = defaultdict(dict)
+    while True:
+	alive = len(parsers)
+	for (n,p,q) in parsers:
+		# a process doesn't die if its queue is
+		# not emptied
+	        if not q.empty():
+		    retValues[n] = q.get()
+		    print "Subprocess", n, "exited"
+		if not p.is_alive():
+		    alive -= 1
+		
+	if alive == 0:
+	    break
+	import time
+	time.sleep(1)
+    extractDataSeries(retValues)
 
     f = open(C.resultDir+"/logfile.txt", "w")
     runTime = datetime.now() - startTime - loadTime
