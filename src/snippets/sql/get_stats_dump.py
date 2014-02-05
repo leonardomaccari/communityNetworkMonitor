@@ -401,7 +401,7 @@ class dataParser():
         cum.plot(bh[:len(cumulativeH)], 
                 np.array(cumulativeH)/partialsum, "--")
                 #label = "Cumulative hopCount")
-        cum.legend(loc="lower right")
+        #cum.legend(loc="lower right")
         plt.savefig(routeFolder+"/routes."+C.imageExtension)
     
         plt.clf()
@@ -439,7 +439,7 @@ class dataParser():
         plt.title("Distribution of the route weights")
         plt.xlabel("route weight (ETX)")
         plt.ylabel("samples")
-        plt.legend(loc="upper right")
+        #plt.legend(loc="upper right")
         plt.savefig(routeFolder+"/etxWeights."+C.imageExtension)
         plt.clf()
     
@@ -925,6 +925,8 @@ class dataPlot:
             self.fileType = "."+C.imageExtension
 
     def plotData(self, style = "-"):
+	if self.outFile == "":
+	    return
         dataDimension = 0
         ax = plt.subplot(111)
         for y in self.y:
@@ -968,90 +970,95 @@ def extractDataSeries(retValues):
 
     for n,v in retValues.items():
 	
-        etx.y.append((v["etx"]["y"], n) )
-        etx.x.append(v["etx"]["x"])
-        etx.title = "ETX ECDF"
-        etx.outFile = "/tmp/etx"
-        etx.xAxisLabel = "ETX"
-        etx.yAxisLabel = ""
+	if "etx" in v:	
+            etx.y.append((v["etx"]["y"], n) )
+            etx.x.append(v["etx"]["x"])
+            etx.title = "ETX ECDF"
+            etx.outFile = "/tmp/etx"
+            etx.xAxisLabel = "ETX"
+            etx.yAxisLabel = ""
 
-        link.x.append(v["link"]["x"])
-        link.x.append(v["link"]["x"])
-        link.x.append(v["link"]["x"])
-        link.y.append((v["link"]["avg"], n))
-        link.y.append((v["link"]["sup"], ""))
-        link.y.append((v["link"]["inf"], ""))
-        link.outFile = comparisonFolder+"link"
-        link.title  = "average ETX per link +/- stddev"
-        link.xAxisLabel = "link"
-        link.yAxisLabel = "ETX"
-        link.legendPosition = "upper left"
+	if "link" in v:	
+            link.x.append(v["link"]["x"])
+            link.x.append(v["link"]["x"])
+            link.x.append(v["link"]["x"])
+            link.y.append((v["link"]["avg"], n))
+            link.y.append((v["link"]["sup"], ""))
+            link.y.append((v["link"]["inf"], ""))
+            link.outFile = comparisonFolder+"link"
+            link.title  = "average ETX per link +/- stddev"
+            link.xAxisLabel = "link"
+            link.yAxisLabel = "ETX"
+            link.legendPosition = "upper left"
 
-        mprRFC.x.append(v["MPRRFC"]["MPR"]["x"])
-        mprRFC.y.append((v["MPRRFC"]["MPR"]["y"], n))
-        mprRFC.title = "Size of the global MPR set (RFC)"
-        mprRFC.outFile = comparisonFolder+"mpr-rfc"
-        mprRFC.xAxisLabel = "snapshot"
-        link.legendPosition = "lower right"
+	if "MPRRFC" in v:
+            mprRFC.x.append(v["MPRRFC"]["MPR"]["x"])
+            mprRFC.y.append((v["MPRRFC"]["MPR"]["y"], n))
+            mprRFC.title = "Size of the global MPR set (RFC)"
+            mprRFC.outFile = comparisonFolder+"mpr-rfc"
+            mprRFC.xAxisLabel = "snapshot"
+            link.legendPosition = "lower right"
 
-        mprLq.x.append(v["MPRlq"]["MPR"]["x"])
-        mprLq.y.append((v["MPRlq"]["MPR"]["y"], n))
-        mprLq.title = "Size of the global MPR set (lq)"
-        mprLq.outFile = comparisonFolder+"mpr-lq"
-        mprLq.xAxisLabel = "snapshot"
-        link.legendPosition = "lower right"
+	if "MPRlq" in v:
+            mprLq.x.append(v["MPRlq"]["MPR"]["x"])
+            mprLq.y.append((v["MPRlq"]["MPR"]["y"], n))
+            mprLq.title = "Size of the global MPR set (lq)"
+            mprLq.outFile = comparisonFolder+"mpr-lq"
+            mprLq.xAxisLabel = "snapshot"
+            link.legendPosition = "lower right"
 
-        mprRobustness.x.append(v["MPRRFC"]["ROBUSTNESS"]["x"])
-        mprRobustness.y.append((v["MPRRFC"]["ROBUSTNESS"]["y"], n+"-RFC"))
-        mprRobustness.x.append(v["MPRlq"]["ROBUSTNESS"]["x"])
-        mprRobustness.y.append((v["MPRlq"]["ROBUSTNESS"]["y"], n+"-lq"))
-        mprRobustness.title = "Robustness metric of the MPR sub-graph"
-        mprRobustness.outFile = comparisonFolder+"robustness"
-        mprRobustness.xAxisLabel = "Broken links"
-        mprRobustness.yAxisLabel = "Robustness"
-        mprRobustness.legendPosition = "aside"
+	if "MPRlq" in v and "MPRRFC" in v:
+            mprRobustness.x.append(v["MPRRFC"]["ROBUSTNESS"]["x"])
+            mprRobustness.y.append((v["MPRRFC"]["ROBUSTNESS"]["y"], n+"-RFC"))
+            mprRobustness.x.append(v["MPRlq"]["ROBUSTNESS"]["x"])
+            mprRobustness.y.append((v["MPRlq"]["ROBUSTNESS"]["y"], n+"-lq"))
+            mprRobustness.title = "Robustness metric of the MPR sub-graph"
+            mprRobustness.outFile = comparisonFolder+"robustness"
+            mprRobustness.xAxisLabel = "Broken links"
+            mprRobustness.yAxisLabel = "Robustness"
+            mprRobustness.legendPosition = "aside"
+	if "CENTRALITY" in v:
+            closeness.x.append(v["CENTRALITY"]["CLOS"]["x"])
+            closeness.y.append((v["CENTRALITY"]["CLOS"]["y"], n))
+            closeness.title = "Group closeness centrality"
+            closeness.outFile = comparisonFolder+"closeness"
+            closeness.xAxisLabel = "Group Size"
+            closeness.yAxisLabel = "Group Closeness"
+            closeness.legendPosition = "upper right"
 
-        #closeness.x.append(v["CENTRALITY"]["CLOS"]["x"])
-        #closeness.y.append((v["CENTRALITY"]["CLOS"]["y"], n))
-        #closeness.title = "Group closeness centrality"
-        #closeness.outFile = comparisonFolder+"closeness"
-        #closeness.xAxisLabel = "Group Size"
-        #closeness.yAxisLabel = "Group Closeness"
-        #closeness.legendPosition = "upper right"
+            closenessV.x.append(range(len(v["CENTRALITY"]["CLOSV"])))
+            closenessV.y.append((v["CENTRALITY"]["CLOSV"], n))
+            closenessV.title = "Group closeness centrality variation"
+            closenessV.outFile = comparisonFolder+"closeness-variation"
+            closenessV.xAxisLabel = "snapshot"
+            closenessV.yAxisLabel = "Group Closeness (5 nodes)"
+            closenessV.legendPosition = "lower center"
 
-        #closenessV.x.append(range(len(v["CENTRALITY"]["CLOSV"])))
-        #closenessV.y.append((v["CENTRALITY"]["CLOSV"], n))
-        #closenessV.title = "Group closeness centrality variation"
-        #closenessV.outFile = comparisonFolder+"closeness-variation"
-        #closenessV.xAxisLabel = "snapshot"
-        #closenessV.yAxisLabel = "Group Closeness (5 nodes)"
-        #closenessV.legendPosition = "lower center"
+            betweenness.x.append(v["CENTRALITY"]["BET"]["x"])
+            betweenness.y.append((v["CENTRALITY"]["BET"]["y"], n))
+            betweenness.title = "Group betweenness centrality"
+            betweenness.outFile = comparisonFolder+"betweenness"
+            betweenness.xAxisLabel = "Group Size"
+            betweenness.yAxisLabel = "Group Betweenness"
+            betweenness.legendPosition = "aside"
 
-        #betweenness.x.append(v["CENTRALITY"]["BET"]["x"])
-        #betweenness.y.append((v["CENTRALITY"]["BET"]["y"], n))
-        #betweenness.title = "Group betweenness centrality"
-        #betweenness.outFile = comparisonFolder+"betweenness"
-        #betweenness.xAxisLabel = "Group Size"
-        #betweenness.yAxisLabel = "Group Betweenness"
-        #betweenness.legendPosition = "aside"
-
-        #betweennessD.x.append(v["CENTRALITY"]["BETD"]["x"])
-        #betweennessD.y.append((v["CENTRALITY"]["BETD"]["y"], n))
-        #betweennessD.title = "Group betweenness (highest degree)"
-        #betweennessD.outFile = comparisonFolder+"betweenness-estimation"
-        #betweennessD.xAxisLabel = "Group Size"
-        #betweennessD.yAxisLabel = "difference from the best group Betweenness (%)"
-        #betweennessD.legendPosition = "upper right"
+            betweennessD.x.append(v["CENTRALITY"]["BETD"]["x"])
+            betweennessD.y.append((v["CENTRALITY"]["BETD"]["y"], n))
+            betweennessD.title = "Group betweenness (highest degree)"
+            betweennessD.outFile = comparisonFolder+"betweenness-estimation"
+            betweennessD.xAxisLabel = "Group Size"
+            betweennessD.yAxisLabel = "difference from the best group Betweenness (%)"
+            betweennessD.legendPosition = "upper right"
 
     etx.plotData()
     link.plotData()
     mprLq.plotData()
     mprRFC.plotData()
     mprRobustness.plotData(style="o")
-    #closeness.plotData()
-    #betweenness.plotData()
-    #betweennessD.plotData()
-    #closenessV.plotData()
+    closeness.plotData()
+    betweenness.plotData()
+    betweennessD.plotData()
+    closenessV.plotData()
         
 
 
@@ -1157,7 +1164,6 @@ if  __name__ =='__main__':
             continue
     if not C.checkCorrectness():
         sys.exit(1)
-
 
 
     rcParams.update({'font.size': 20})
