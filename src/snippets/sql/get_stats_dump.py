@@ -242,7 +242,7 @@ class dataParser():
             r = self.computeRobustness(G, tests=30)[0]
             for k,v in r.items():
                 robustness.append(v)
-                x.append(float(k)/len(G.edges()))
+                x.append(int(100*float(k)/len(G.edges())))
             r = self.computeRobustness(G, tests=30, mode="core")[0]
             for k,v in r.items():
                 coreRobustness.append(v)
@@ -406,7 +406,7 @@ class dataParser():
         cumulativeH = []
         cumulativeE = []
         partialsum = 0.0
-        plt.title("Frequency of route lenght and weight,", net)
+        plt.title("Frequency of route lenght and weight, "+net)
         for i in he:
             partialsum += i
             cumulativeE.append(partialsum)
@@ -1138,7 +1138,7 @@ def extractDataSeries(retValues):
             robustness.x.append(v["ROBUSTNESS"]["CRB"]["x"])
             robustness.y.append((v["ROBUSTNESS"]["CRB"]["y"],n+" core"))
             robustness.title = "Robustness metrics"
-            robustness.xAxisLabel = "Failed links"
+            robustness.xAxisLabel = "Failed links (%)"
             robustness.legendPosition = "lower left"
             robustness.outFile = comparisonFolder+"graphrobustness"
 
