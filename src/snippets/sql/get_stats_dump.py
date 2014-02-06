@@ -242,7 +242,7 @@ class dataParser():
             r = self.computeRobustness(G, tests=30)[0]
             for k,v in r.items():
                 robustness.append(v)
-                x.append(int(100*float(k)/len(G.edges())))
+                x.append(float(k)/len(G.edges()))
             r = self.computeRobustness(G, tests=30, mode="core")[0]
             for k,v in r.items():
                 coreRobustness.append(v)
@@ -1095,7 +1095,7 @@ def extractDataSeries(retValues):
             mprRobustness.y.append((v["MPRlq"]["ROBUSTNESS"]["y"], n+"-lq"))
             mprRobustness.title = "Robustness metric of the MPR sub-graph"
             mprRobustness.outFile = comparisonFolder+"mprrobustness"
-            mprRobustness.xAxisLabel = "Broken links"
+            mprRobustness.xAxisLabel = "Failed links/mpr number"
             mprRobustness.yAxisLabel = "Robustness"
             mprRobustness.legendPosition = "upper right"
 
@@ -1138,7 +1138,7 @@ def extractDataSeries(retValues):
             robustness.x.append(v["ROBUSTNESS"]["CRB"]["x"])
             robustness.y.append((v["ROBUSTNESS"]["CRB"]["y"],n+" core"))
             robustness.title = "Robustness metrics"
-            robustness.xAxisLabel = "Failed links (%)"
+            robustness.xAxisLabel = "Fraction of failed links"
             robustness.legendPosition = "lower left"
             robustness.outFile = comparisonFolder+"graphrobustness"
 
