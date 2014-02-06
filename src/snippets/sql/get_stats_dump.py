@@ -242,7 +242,7 @@ class dataParser():
             r = self.computeRobustness(G, tests=30)[0]
             for k,v in r.items():
                 robustness.append(v)
-                x.append(float(k)/len(G))
+                x.append(float(k)/len(G.edges()))
             r = self.computeRobustness(G, tests=30, mode="core")[0]
             for k,v in r.items():
                 coreRobustness.append(v)
@@ -406,7 +406,7 @@ class dataParser():
         cumulativeH = []
         cumulativeE = []
         partialsum = 0.0
-        plt.title("Frequency of route lenght and weight")
+        plt.title("Frequency of route lenght and weight,", net)
         for i in he:
             partialsum += i
             cumulativeE.append(partialsum)
@@ -538,7 +538,7 @@ class dataParser():
         p.set_yscale("log")
         ##p.set_ylim(0,1)
         ##plt.ylim([0.0001,0])
-        plt.title("degree relative frequency ")
+        plt.title("Degree relative frequency ")
         plt.savefig(routeFolder+"/degree."+C.imageExtension)
         plt.clf()
     
@@ -565,7 +565,7 @@ class dataParser():
         betSol = defaultdict(list)
         clSol = defaultdict(list)
         counter = 0 # testing only, limit the number of graphs under analysis
-        graphLimit = 10
+        graphLimit = 10000
         firstSolution = set()
         solutionVariation = []
         for scanId in data.routeData[net]:
@@ -1057,7 +1057,7 @@ def extractDataSeries(retValues):
             etx.outFile = comparisonFolder+"etx"
             etx.xAxisLabel = "ETX"
             etx.yAxisLabel = ""
-            etx.legendPosition = "upper right"
+            etx.legendPosition = "center right"
 
         if "link" in v:	
             link.x.append(v["link"]["x"])
@@ -1067,10 +1067,10 @@ def extractDataSeries(retValues):
             link.y.append((v["link"]["sup"], ""))
             link.y.append((v["link"]["inf"], ""))
             link.outFile = comparisonFolder+"link"
-            link.title  = "average ETX per link +/- stddev"
+            link.title  = "Average ETX per link with stddev"
             link.xAxisLabel = "link"
             link.yAxisLabel = "ETX"
-            link.legendPosition = "upper left"
+            link.legendPosition = "center left"
 
         if "MPRRFC" in v:
             mprRFC.x.append(v["MPRRFC"]["MPR"]["x"])
@@ -1097,7 +1097,7 @@ def extractDataSeries(retValues):
             mprRobustness.outFile = comparisonFolder+"mprrobustness"
             mprRobustness.xAxisLabel = "Broken links"
             mprRobustness.yAxisLabel = "Robustness"
-            mprRobustness.legendPosition = "aside"
+            mprRobustness.legendPosition = "upper right"
 
         if "CENTRALITY" in v:
             closeness.x.append(v["CENTRALITY"]["CLOS"]["x"])
@@ -1114,7 +1114,7 @@ def extractDataSeries(retValues):
             closenessV.outFile = comparisonFolder+"closeness-variation"
             closenessV.xAxisLabel = "snapshot"
             closenessV.yAxisLabel = "Group Closeness (5 nodes)"
-            closenessV.legendPosition = "lower center"
+            closenessV.legendPosition = "upper left"
 
             betweenness.x.append(v["CENTRALITY"]["BET"]["x"])
             betweenness.y.append((v["CENTRALITY"]["BET"]["y"], n))
@@ -1139,7 +1139,7 @@ def extractDataSeries(retValues):
             robustness.y.append((v["ROBUSTNESS"]["CRB"]["y"],n+" core"))
             robustness.title = "Robustness metrics"
             robustness.xAxisLabel = "Failed links"
-            robustness.legendPosition = "upper right"
+            robustness.legendPosition = "lower left"
             robustness.outFile = comparisonFolder+"graphrobustness"
 
 
