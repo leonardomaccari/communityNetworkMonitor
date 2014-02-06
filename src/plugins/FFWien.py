@@ -241,7 +241,7 @@ class FFWien(plugin):
             return []
         returnLinks = []
 
-        for l in link[::-1]:
+        for l in link:
             try:
                 date = datetime.strptime(l.string, "topo-%Y-%m-%d-%H:%M.tsv.gz")
             except ValueError:
@@ -279,6 +279,8 @@ class FFWien(plugin):
                 self.logger.info('breaking')
                 # if this is the first ETX scan, we may dowload hundreds of
                 # topologies. Avoid this, exit after the first one
+                # FIXME as with the FFGraz plugin, this can be parametrized
+                # and should be put in the base configuration parameters
                 break
 
     def parseTopologyFile(self, fileLink):
@@ -293,7 +295,9 @@ class FFWien(plugin):
             return
         self.logger.info("Ok, parsing the topology from url %s", fileLink)
         olsrDump = gzip.open(f[0])
-        newScan = scan(network=self.pluginName) 
+        newDateString = fileLink.split("/")[-1]
+        newDate = datetime.strptime(newDateString, "topo-%Y-%m-%d-%H:%M.tsv.gz")
+        newScan = scan(network=self.pluginName, time=newDate) 
         self.localSession.add(newScan)
         G = nx.Graph()
 
