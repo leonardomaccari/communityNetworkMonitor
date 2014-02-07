@@ -201,7 +201,15 @@ class dataParser():
     def __init__(self, netName, queue):
         self.net = netName
         self.q = queue
-    def run(self):
+
+    def run(self, rData, routeData, lData, sData):
+	""" I need to pass the data here and not in the constructor
+	    or else I duplicate the whole memory of the father"""
+	self.rawData = rData
+	self.routeData = routeData
+	self.linkData = lData
+	self.dataSummary = sData
+	print "data loaded", self.net
         try:
             os.makedirs(C.resultDir+self.net)
         except OSError:
@@ -217,14 +225,14 @@ class dataParser():
             os.mkdir(C.resultDir+self.net)
         netEtx = []
         retValue = {}
-        for scanId in data.rawData[self.net]:
-            netEtx += data.rawData[self.net][scanId]
+        for scanId in self.rawData:
+            netEtx += self.rawData[scanId]
         self.getRouteDistributions(self.net)
         self.getDegreeDistribution(self.net)
         bins = np.array(range(1,1000))/100.0
         retValue["etx"] = self.getETXDistribution(netEtx, bins)
         retValue["link"] = self.getLinkDistributions(self.net)
-        retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
+        #retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
         mprRFC = self.getMPRSets(self.net, "RFC")
         retValue["MPRRFC"] = mprRFC
         mprLq = self.getMPRSets(self.net, "lq")
@@ -237,8 +245,8 @@ class dataParser():
         robustness = []
         x = []
         coreRobustness = []
-        for scanId in data.routeData[net]:
-            G = data.routeData[net][scanId]["Graph"]
+        for scanId in self.routeData:
+            G = self.routeData[scanId]["Graph"]
             r = self.computeRobustness(G, tests=30)[0]
             for k,v in r.items():
                 robustness.append(v)
@@ -304,11 +312,11 @@ class dataParser():
         except:
             pass
         etxRanking = []
-        for s in data.linkData[net]:
-            for d,vArray in data.linkData[net][s].items():
+        for s in self.linkData:
+            for d,vArray in self.linkData[s].items():
                 # considering only the links that appear in 
                 # at least 30% of the samples
-                if len(vArray) < 0.2*len(data.dataSummary[net]):
+                if len(vArray) < 0.2*len(self.dataSummary):
                     continue
                 cleanList = [ e for e in vArray if e < 20]
                 avgEtx = np.average(cleanList)
@@ -346,8 +354,8 @@ class dataParser():
         etxList = []
         etxTime = dd2()
         numHopMap = defaultdict(list)
-        for scan in data.routeData[net]:
-            D = data.routeData[net][scan]['data']
+        for scan in self.routeData:
+            D = self.routeData[scan]['data']
             for s in D:
                 for d in D[s]:
                     if D[s][d][1] < 60:
@@ -513,8 +521,8 @@ class dataParser():
         routeFolder = C.resultDir+net+"/ROUTES"
         degreeDistribution = defaultdict(float)
         samples = 0.0
-        for scanId in data.routeData[net]:
-            graph = data.routeData[net][scanId]["Graph"]
+        for scanId in self.routeData:
+            graph = self.routeData[scanId]["Graph"]
             for node in graph:
                 degreeDistribution[graph.degree(node)] += 1
                 samples += 1
@@ -568,12 +576,12 @@ class dataParser():
         graphLimit = 10000
         firstSolution = set()
         solutionVariation = []
-        for scanId in data.routeData[net]:
+        for scanId in self.routeData:
             if counter >= graphLimit:
                 print >> sys.stderr, "Exiting after", graphLimit, "tests"
                 break
             counter += 1
-            G = data.routeData[net][scanId]["Graph"]
+            G = self.routeData[scanId]["Graph"]
             if len(G.nodes()) < 10:
                 print >> sys.stderr, "ERROR, graph has only ", len(G.nodes()), "nodes!"
                 continue
@@ -809,12 +817,12 @@ class dataParser():
         mainCSize = defaultdict(list)
         relativeMainCSize = defaultdict(list)
         selectorSetArray = []
-        for scanId in data.routeData[net]:
+        for scanId in self.routeData:
             selectorSet = defaultdict(set)
             if counter <= 0:
                 return
             counter -= 1
-            G = data.routeData[net][scanId]["Graph"]
+            G = self.routeData[scanId]["Graph"]
             if len(G.nodes()) < 10:
                 print >> sys.stderr, "ERROR, graph has only ", len(G.nodes()),\
                         "nodes!"
@@ -1291,29 +1299,36 @@ if  __name__ =='__main__':
     createFolder("CENTRALITY")
     createFolder("COMPARISON")
     parsers = []
+    code.interact(local=locals())
     for net in data.rawData:
         q = Queue()
         parser = dataParser(net, q)
-        p = Process(target=parser.run)
+        p = Process(target=parser.run, args = (data.rawData[net], 
+    		data.routeData[net], data.linkData[net],
+	    	data.dataSummary[net]))
+        data.rawData[net] = {}
+        data.routeData[net] = {}
+        data.linkData[net] = {}
+        data.dataSummary[net] = {}
         parsers.append((net, p, q))
         p.start()
 
     retValues = defaultdict(dict)
     while True:
-	alive = len(parsers)
-	for (n,p,q) in parsers:
-		# a process doesn't die if its queue is
-		# not emptied
-	        if not q.empty():
-		    retValues[n] = q.get()
-		    print "Subprocess", n, "exited"
-		if not p.is_alive():
-		    alive -= 1
-		
-	if alive == 0:
-	    break
-	import time
-	time.sleep(1)
+        alive = len(parsers)
+        for (n,p,q) in parsers:
+        	# a process doesn't die if its queue is
+        	# not emptied
+                if not q.empty():
+        	    retValues[n] = q.get()
+        	    print "Subprocess", n, "exited"
+        	if not p.is_alive():
+        	    alive -= 1
+        	
+        if alive == 0:
+            break
+        import time
+        time.sleep(1)
     extractDataSeries(retValues)
 
     f = open(C.resultDir+"/logfile.txt", "w")
