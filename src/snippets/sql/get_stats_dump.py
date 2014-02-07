@@ -233,32 +233,39 @@ class dataParser():
         retValue["etx"] = self.getETXDistribution(netEtx, bins)
         retValue["link"] = self.getLinkDistributions(self.net)
         #retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
-        mprRFC = self.getMPRSets(self.net, "RFC")
-        retValue["MPRRFC"] = mprRFC
-        mprLq = self.getMPRSets(self.net, "lq")
-        retValue["MPRlq"] = mprLq
+        #mprRFC = self.getMPRSets(self.net, "RFC")
+        #retValue["MPRRFC"] = mprRFC
+        #mprLq = self.getMPRSets(self.net, "lq")
+        #retValue["MPRlq"] = mprLq
         #print "XXX", wc, lqTraffic, rfcTraffic
         retValue["ROBUSTNESS"] = self.getRobustness()
         q.put(retValue)
 	
     def getRobustness(self):
         robustness = []
-        x = []
         coreRobustness = []
+        averageRobustness = defaultdict(list) 
+        averageCoreRobustness = defaultdict(list) 
         for scanId in self.routeData:
             G = self.routeData[scanId]["Graph"]
             r = self.computeRobustness(G, tests=30)[0]
             for k,v in r.items():
                 robustness.append(v)
-                x.append(float(k)/len(G.edges()))
+                percent = int(100*float(k)/len(G.edges()))
+                averageRobustness[percent].append(v)
+                #x.append(float(k)/len(G.edges()))
             r = self.computeRobustness(G, tests=30, mode="core")[0]
             for k,v in r.items():
+                percent = int(100*float(k)/len(G.edges()))
+                averageCoreRobustness[percent].append(v)
                 coreRobustness.append(v)
         retValue = defaultdict(dict)
-        retValue["RB"]["x"] = x
-        retValue["RB"]["y"] = robustness
-        retValue["CRB"]["x"] = x
-        retValue["CRB"]["y"] = coreRobustness
+        retValue["RB"]["x"] = averageRobustness.keys()
+        retValue["RB"]["y"] = [np.average(averageRobustness[k]) \
+                for k in sorted(averageRobustness.keys())]
+        retValue["CRB"]["x"] = averageRobustness.keys()
+        retValue["CRB"]["y"] = [np.average(averageCoreRobustness[k]) \
+                for k in sorted(averageCoreRobustness.keys())]
         return retValue
 
 
@@ -469,7 +476,7 @@ class dataParser():
         #                 horizontalalignment='center',
         #                 fontsize=20,
         #                 transform = ax2.transAxes)
-        plt.title("route weight Vs route lenght")
+        plt.title("Route weight Vs route lenght")
         plt.savefig(routeFolder+"/boxplot."+C.imageExtension)
         plt.clf()
         
@@ -479,7 +486,7 @@ class dataParser():
             plt.plot(bins[:-1], h)
             #plt.plot(bins[:-1], h, label="route length "+str(i))
         plt.title("Distribution of the route weights")
-        plt.xlabel("route weight (ETX)")
+        plt.xlabel("Route weight (ETX)")
         plt.ylabel("samples")
         #plt.legend(loc="upper right")
         plt.savefig(routeFolder+"/etxWeights."+C.imageExtension)
@@ -541,7 +548,7 @@ class dataParser():
         for v in x:
             fittedValue.append(out[0]*(v**out[1]))
         p = plt.subplot(1,1,1)
-        p.plot(x, degreeDistribution.values(), "bo", markersize=12)#, x, fittedValue)
+        p.plot(x, degreeDistribution.values(), "bo", markersize=15)#, x, fittedValue)
         p.set_xscale("log")
         p.set_yscale("log")
         ##p.set_ylim(0,1)
@@ -849,7 +856,7 @@ class dataParser():
                         len(G[node])*SelectorFieldSize)/TCPeriod
             worstCaseTraffic.append(TCtraffic*len(G.nodes())/len(G.edges()))
 
-            m, nm = self.computeRobustness(purgedG, tests=10)
+            m, nm = self.computeRobustness(purgedG, tests=30)
 
             for k in m:
                 mainCSize[k].append(m[k])
@@ -870,7 +877,10 @@ class dataParser():
         plt.savefig(routeFolder+"/robustness-"+mprMode+"."+C.imageExtension)
         plt.clf()
 
-        retValue["MPR"]["x"] = range(len(mpr))
+        if self.network == "FFGraz":
+            retValue["MPR"]["x"] = range(0,len(mpr)*2, 2)
+        else:
+            retValue["MPR"]["x"] = range(len(mpr))
         retValue["MPR"]["y"] = [len(x) for x in mpr]
         plt.plot(retValue["MPR"]["x"], retValue["MPR"]["y"])
         plt.title("Global MPR set size, mode=\""+mprMode+"\","+net)
@@ -1069,11 +1079,11 @@ def extractDataSeries(retValues):
 
         if "link" in v:	
             link.x.append(v["link"]["x"])
-            link.x.append(v["link"]["x"])
-            link.x.append(v["link"]["x"])
+            #link.x.append(v["link"]["x"])
+            #link.x.append(v["link"]["x"])
             link.y.append((v["link"]["avg"], n))
-            link.y.append((v["link"]["sup"], ""))
-            link.y.append((v["link"]["inf"], ""))
+            #link.y.append((v["link"]["sup"], ""))
+            #link.y.append((v["link"]["inf"], ""))
             link.outFile = comparisonFolder+"link"
             link.title  = "Average ETX per link with stddev"
             link.xAxisLabel = "link"
@@ -1114,7 +1124,7 @@ def extractDataSeries(retValues):
             closeness.outFile = comparisonFolder+"closeness"
             closeness.xAxisLabel = "Group Size"
             closeness.yAxisLabel = "Group Closeness"
-            closeness.legendPosition = "upper right"
+            closeness.legendPosition = "lower left"
 
             closenessV.x.append(range(len(v["CENTRALITY"]["CLOSV"]["x"])))
             closenessV.y.append((v["CENTRALITY"]["CLOSV"]["y"], n))
@@ -1160,7 +1170,7 @@ def extractDataSeries(retValues):
     betweenness.plotData()
     betweennessD.plotData()
     closenessV.plotData()
-    robustness.plotData(style="o")
+    robustness.plotData()
         
 
 
@@ -1299,7 +1309,6 @@ if  __name__ =='__main__':
     createFolder("CENTRALITY")
     createFolder("COMPARISON")
     parsers = []
-    code.interact(local=locals())
     for net in data.rawData:
         q = Queue()
         parser = dataParser(net, q)
