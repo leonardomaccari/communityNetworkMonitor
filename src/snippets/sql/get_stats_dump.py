@@ -50,7 +50,6 @@ class dataObject:
     def __init__(self):
         self.scanTree = dd2()
         self.rawData = dd2()
-        self.linkData = dd3()
         self.dataSummary = dd3()
         self.dumpFile = ""
         self.routeData = dd5()
@@ -66,7 +65,6 @@ class dataObject:
         d = pk.load(f)
         self.scanTree = d.scanTree
         self.rawData = d.rawData
-        self.linkData = d.linkData
         self.dataSummary = d.dataSummary
         self.routeData = d.routeData
         f.close()
@@ -83,14 +81,14 @@ class dataObject:
             logString += "\n"
             # print the header
             for sid in data.dataSummary[net]:
-                logString += str("ID").ljust(3)
+                logString += str("ID").ljust(4)
                 for label in data.dataSummary[net][sid]:
                     logString += label[0].ljust(label[1]) + " "
                 logString += "\n"
                 break
             # print the data
             for sid in sorted(data.dataSummary[net]):
-                logString += str(sid).ljust(3)
+                logString += str(sid).ljust(4)
                 for key, value in data.dataSummary[net][sid].items():
                     logString += str(value).ljust(key[1]) + " "
                 logString += "\n"
@@ -126,12 +124,12 @@ def getDataSummary(ls, data):
     
     for net in data.scanTree:
         counter = 0
-	# for graz I have one sample every 10 minutes,
+	    # for graz I have one sample every 10 minutes,
         # for ninux/Wien I have one sample every 5 minutes
-	if net == "FFGraz":
-	    networkPenalty = 2
-	else:
-	    networkPenalty = 1
+        if net == "FFGraz":
+            networkPenalty = 2
+        else:
+            networkPenalty = 1
         for scanId in data.scanTree[net]['ETX']:
             if C.numRuns > 0 and counter >= C.numRuns/networkPenalty:
                 break
@@ -142,7 +140,6 @@ def getDataSummary(ls, data):
             for s,d,e in q:
                 if e < C.etxThreshold:
                     dirtyG.add_edge(s,d, weight=float(e))
-                    data.linkData[net][s][d].append(e)
 
             if C.createTestRun == True:
                 nd = dirtyG.degree()
@@ -181,16 +178,30 @@ def getDataSummary(ls, data):
             data.routeData[net][scanId[0]]["Graph"] = G
 
 
+            nd = filter(lambda x: x >1, dirtyG.degree().values())
+            nl = len(nd)
+            nn = len(dirtyG)
+            le = len(etxV)
+            avgEtx = np.average(etxV)
+            data.dataSummary[net][scanId[0]][("numLeaves", 9)] =  nl
             data.dataSummary[net][scanId[0]][("time", 30)] = scanId[1]
-            data.dataSummary[net][scanId[0]][("numNodes",9)] = len(dirtyG)
-            data.dataSummary[net][scanId[0]][("numEdges",9)] = len(etxV)
+            data.dataSummary[net][scanId[0]][("numNodes",9)] = nn
+            data.dataSummary[net][scanId[0]][("numEdges",9)] = le
             data.dataSummary[net][scanId[0]][("largestComponent",16)] = \
                     componentSize
-            data.dataSummary[net][scanId[0]][("etxAvg",8)] = \
-                    str(np.average(etxV))[0:5]
+            data.dataSummary[net][scanId[0]][("etxAvg",8)] = str(avgEtx)[0:5]
+
             scanCounter += 1
             if int((100000 * 1.0*scanCounter / numScan)) % 10000 == 0:
                 print int((100 * 1.0*scanCounter / numScan)),"% complete"
+        #avg = defaultDict(list)
+        #avg[("leaves", 3)].append(nl)
+        #avg[("numNodes", 9)].append(nn)
+        #avg[("numEdges", 9)].append(le)
+        #avg[("largestComponent", 16)].append(componentSize)
+        #avg[("etxAvg", 16)].append(avgEtx)
+        #for label in avg:
+        #    data.dataAvg[net][label] = np.average(avg[label]) 
 
 
 class dataParser():
@@ -202,12 +213,11 @@ class dataParser():
         self.net = netName
         self.q = queue
 
-    def run(self, rData, routeData, lData, sData):
+    def run(self, rData, routeData, sData):
 	""" I need to pass the data here and not in the constructor
 	    or else I duplicate the whole memory of the father"""
 	self.rawData = rData
 	self.routeData = routeData
-	self.linkData = lData
 	self.dataSummary = sData
 	print "data loaded", self.net
         try:
@@ -230,7 +240,7 @@ class dataParser():
         self.getRouteDistributions(self.net)
         self.getDegreeDistribution(self.net)
         bins = np.array(range(1,1000))/100.0
-        retValue["etx"] = self.getETXDistribution(netEtx, bins)
+        #retValue["etx"] = self.getETXDistribution(netEtx, bins)
         retValue["link"] = self.getLinkDistributions(self.net)
         #retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
         #mprRFC = self.getMPRSets(self.net, "RFC")
@@ -238,7 +248,7 @@ class dataParser():
         #mprLq = self.getMPRSets(self.net, "lq")
         #retValue["MPRlq"] = mprLq
         #print "XXX", wc, lqTraffic, rfcTraffic
-        retValue["ROBUSTNESS"] = self.getRobustness()
+        #retValue["ROBUSTNESS"] = self.getRobustness()
         q.put(retValue)
 	
     def getRobustness(self):
@@ -319,17 +329,23 @@ class dataParser():
         except:
             pass
         etxRanking = []
-        for s in self.linkData:
-            for d,vArray in self.linkData[s].items():
-                # considering only the links that appear in 
-                # at least 30% of the samples
-                if len(vArray) < 0.2*len(self.dataSummary):
-                    continue
-                cleanList = [ e for e in vArray if e < 20]
-                avgEtx = np.average(cleanList)
-                avgStd = np.std(cleanList)
-                etxRanking.append([avgEtx, avgEtx+avgStd/2,\
-                    avgEtx-avgStd/2])
+        linkDict = defaultdict(list)
+        for scanId in self.routeData:
+            g = self.routeData[scanId]["Graph"]
+            for s,d,etxDict in g.edges(data=True):
+                # cleaning meanless links
+                if etxDict["weight"] < 20:
+                    linkDict[(s,d)].append(etxDict["weight"])
+
+        for link, etxArray in linkDict.items():
+            # considering only the links that appear in 
+            # at least 30% of the samples
+            if len(etxArray) < 0.3*len(self.dataSummary):
+                continue
+            avgEtx = np.average(etxArray)
+            avgStd = np.std(etxArray)
+            etxRanking.append([avgEtx, avgEtx+avgStd/2,\
+                avgEtx-avgStd/2])
          
         x = range(len(etxRanking))
         avg = [e[0] for e in sorted(etxRanking, key = lambda x: x[0])]
@@ -593,9 +609,16 @@ class dataParser():
                 print >> sys.stderr, "ERROR, graph has only ", len(G.nodes()), "nodes!"
                 continue
             # this will make a global graph of all the runs
-            singleNodeBetweenness += nx.betweenness_centrality(G).values()
-            singleNodeCloseness += nx.closeness_centrality(G, distance=True, 
-                    normalized=False).values()
+            b = nx.betweenness_centrality(G)
+            c = nx.closeness_centrality(G, distance=True, 
+                    normalized=False)
+            for n in G.nodes():
+                if len(G[n]) > 1:
+                    singleNodeBetweenness.append(b[n])
+                    singleNodeCloseness.append(c[n])
+            #singleNodeBetweenness += nx.betweenness_centrality(G).values()
+            #singleNodeCloseness += nx.closeness_centrality(G, distance=True, 
+            #        normalized=False).values()
     
             # this will call a multi-process routine that will compute the 
             # betweenness
@@ -763,8 +786,8 @@ class dataParser():
         h,b = np.histogram(singleNodeBetweenness, bins=100) 
         totalSamples = sum(h)
         sb = plt.subplot(1,1,1)
-        sb.yaxis.tick_left()
-        sb.plot(b[1:], h, color="blue")
+        #sb.yaxis.tick_left()
+        #sb.plot(b[1:], h, color="blue")
         plt.ylabel("# Samples")
         plt.xlabel("Betweenness")
     
@@ -773,14 +796,18 @@ class dataParser():
         for v in h:
             partialSum += v
             sumSamples.append(partialSum)
-        sbSum=sb.twinx()
-        sbSum.yaxis.tick_right()
-        sbSum.yaxis.set_label_position("right")
+        #sbSum=sb.twinx()
+        sbSum = sb
+        #sbSum.yaxis.tick_right()
+        #sbSum.yaxis.set_label_position("right")
         sbSum.set_ylim([0,1])
         sbSum.plot(b[1:], (np.array(sumSamples)/totalSamples), 
                 color="red")
-        plt.title("Centrality histogram and normalized integral (all runs)")
+        plt.title("Centrality histogram and normalized integral (all runs, non-leaf nodes)")
         plt.savefig(centFolder+"/betw-singleNode-"+net+"."+C.imageExtension)
+        retValue["SINGLEB"]["x"] = b[1:]
+        retValue["SINGLEB"]["y"] = \
+                np.array(sumSamples)/totalSamples
     
         plt.clf()
         h,b = np.histogram([1/x for x in singleNodeCloseness], bins=100) 
@@ -805,10 +832,14 @@ class dataParser():
                 color="red")
         plt.savefig(centFolder+"/clos-singleNode-"+net+"."+C.imageExtension)
         plt.clf()
+
+        retValue["SINGLEC"]["x"] = b[1:]
+        retValue["SINGLEC"]["y"] = \
+                np.array(sumSamples)/totalSamples
         return retValue
-    
-    
-    
+
+
+
     def getMPRSets(self, net, mprMode):
         routeFolder = C.resultDir+net+"/ROUTES/"
         counter = 700 # testing only, limit the number of graphs under analysis
@@ -1066,6 +1097,8 @@ def extractDataSeries(retValues):
     closenessV = dataPlot(C)
     robustness = dataPlot(C)
     comparisonFolder = C.resultDir+"/COMPARISON/"
+    singleNodeCloseness = dataPlot(C)
+    singleNodeBetweenness = dataPlot(C)
 
     for n,v in retValues.items():
         if "etx" in v:	
@@ -1084,6 +1117,12 @@ def extractDataSeries(retValues):
             link.y.append((v["link"]["avg"], n))
             #link.y.append((v["link"]["sup"], ""))
             #link.y.append((v["link"]["inf"], ""))
+            relStddList = []
+            for i in range(len(v["link"]["avg"])):
+                relStddList.append((v["link"]["sup"][i] - 
+                        v["link"]["inf"][i])/
+                    v["link"]["avg"][i])
+            print "XXXX avg rel stddev", n, np.average(relStddList)
             link.outFile = comparisonFolder+"link"
             link.title  = "Average ETX per link with stddev"
             link.xAxisLabel = "link"
@@ -1118,8 +1157,23 @@ def extractDataSeries(retValues):
             mprRobustness.legendPosition = "upper right"
 
         if "CENTRALITY" in v:
-            closeness.x.append(v["CENTRALITY"]["CLOS"]["x"])
+            singleNodeCloseness.x.append(v["CENTRALITY"]["SINGLEC"]["x"])
+            singleNodeCloseness.y.append((v["CENTRALITY"]["SINGLEC"]["y"],n))
+            singleNodeCloseness.title = "Closeness ECDF, non-leaf nodes"
+            singleNodeCloseness.outFile = comparisonFolder + "sgCloseness"
+            singleNodeCloseness.xAxisLabel = "Closeness"
+            singleNodeCloseness.yAxisLabel = ""
+            singleNodeCloseness.legendPosition = "lower right"
+
+            singleNodeBetweenness.x.append(v["CENTRALITY"]["SINGLEB"]["x"])
+            singleNodeBetweenness.y.append((v["CENTRALITY"]["SINGLEB"]["y"],n))
+            singleNodeBetweenness.title = "Betweenness ECDF, non-leaf nodes"
+            singleNodeBetweenness.outFile = comparisonFolder + "sgBetweenness"
+            singleNodeBetweenness.xAxisLabel = "Betweenness"
+            singleNodeBetweenness.yAxisLabel = ""
+            singleNodeBetweenness.legendPosition = "lower right"
             closeness.y.append((v["CENTRALITY"]["CLOS"]["y"], n))
+            closeness.x.append(v["CENTRALITY"]["CLOS"]["x"])
             closeness.title = "Group closeness centrality"
             closeness.outFile = comparisonFolder+"closeness"
             closeness.xAxisLabel = "Group Size"
@@ -1171,6 +1225,8 @@ def extractDataSeries(retValues):
     betweennessD.plotData()
     closenessV.plotData()
     robustness.plotData()
+    singleNodeCloseness.plotData()
+    singleNodeBetweenness.plotData()
         
 
 
@@ -1313,11 +1369,10 @@ if  __name__ =='__main__':
         q = Queue()
         parser = dataParser(net, q)
         p = Process(target=parser.run, args = (data.rawData[net], 
-    		data.routeData[net], data.linkData[net],
+    		data.routeData[net], 
 	    	data.dataSummary[net]))
         data.rawData[net] = {}
         data.routeData[net] = {}
-        data.linkData[net] = {}
         data.dataSummary[net] = {}
         parsers.append((net, p, q))
         p.start()
