@@ -178,12 +178,12 @@ def getDataSummary(ls, data):
             data.routeData[net][scanId[0]]["Graph"] = G
 
 
-            nd = filter(lambda x: x >1, dirtyG.degree().values())
+            nd = filter(lambda x: x==1, dirtyG.degree().values())
             nl = len(nd)
             nn = len(dirtyG)
             le = len(etxV)
             avgEtx = np.average(etxV)
-            data.dataSummary[net][scanId[0]][("numLeaves", 9)] =  nl
+            data.dataSummary[net][scanId[0]][("numLeaves", 9)] = nl
             data.dataSummary[net][scanId[0]][("time", 30)] = scanId[1]
             data.dataSummary[net][scanId[0]][("numNodes",9)] = nn
             data.dataSummary[net][scanId[0]][("numEdges",9)] = le
@@ -212,6 +212,7 @@ class dataParser():
     def __init__(self, netName, queue):
         self.net = netName
         self.q = queue
+        self.weightStats = dd1()
 
     def run(self, rData, routeData, sData):
 	""" I need to pass the data here and not in the constructor
@@ -238,18 +239,69 @@ class dataParser():
         for scanId in self.rawData:
             netEtx += self.rawData[scanId]
         self.getRouteDistributions(self.net)
-        self.getDegreeDistribution(self.net)
-        bins = np.array(range(1,1000))/100.0
+        #self.getDegreeDistribution(self.net)
+        #self.getMetricRelevance()
+        #bins = np.array(range(1,1000))/100.0
         #retValue["etx"] = self.getETXDistribution(netEtx, bins)
-        retValue["link"] = self.getLinkDistributions(self.net)
+        
+        #retValue["link"] = self.getLinkDistributions(self.net)
         #retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
-        #mprRFC = self.getMPRSets(self.net, "RFC")
+        retValue["MPRSIGRFC"] = self.getMPRSets(self.net, "RFC")
         #retValue["MPRRFC"] = mprRFC
-        #mprLq = self.getMPRSets(self.net, "lq")
+        #retValue["MPRSIGLQ"] = self.getMPRSets(self.net, "lq")
         #retValue["MPRlq"] = mprLq
         #print "XXX", wc, lqTraffic, rfcTraffic
-        #retValue["ROBUSTNESS"] = self.getRobustness()
+        retValue["ROBUSTNESS"] = self.getRobustness()
         q.put(retValue)
+
+    def getMetricRelevance(self, scanId, solution):
+        G = self.routeData[scanId]["Graph"]
+        allp = nx.all_pairs_dijkstra_path_length(G)
+        rTable = {}
+        for node in G.nodes():
+            rTable[node] = self.getRoutingTable(node,
+                   self.getNodeView(node, solution,  G))
+        self.rTable = rTable
+        for i in range(len(G)):
+            source = G.nodes()[i]
+            for k in range(i+1, len(G)):
+                target = G.nodes()[k]
+                sol = self.navigateGraph(source, target, [source])
+                weight = 0
+                #print "XX1", sol 
+                #print "XX2", allp[source][target]
+                for k in range(len(sol)-1):
+                    w = G[sol[k]][sol[k+1]]['weight']
+                    weight += w
+                self.weightStats[(source,target)].append(
+                        [allp[source][target],weight])
+       
+
+    def navigateGraph(self, source, dest, sol = []):
+        if source == dest:
+            return sol
+        else:
+            nh = self.rTable[source][dest]
+            sol.append(nh)
+            return self.navigateGraph(nh, dest, sol)
+
+    def getNodeView(self, node, solution,  G):
+        purgedGraph = purgeNonMPRLinks(G, solution, weighted=True)
+        for neigh in G[node]:
+            purgedGraph.add_edge(node, neigh,
+                  weight=G[node][neigh]["weight"])
+            for n2 in G[neigh]:
+                purgedGraph.add_edge(neigh, n2,
+                      weight=G[neigh][n2]["weight"])
+        return purgedGraph
+
+    def getRoutingTable(self, node, G):
+        shortestPaths = nx.single_source_dijkstra(G, node)[1]
+        rTable = {}
+        for dest, path in shortestPaths.items():
+            if len(path) > 1:
+                rTable[dest] = path[1]
+        return rTable
 	
     def getRobustness(self):
         robustness = []
@@ -418,16 +470,12 @@ class dataParser():
         plt.savefig("/tmp/"+net+"routeTimeVariation."+C.imageExtension)
         plt.clf()
 
-        
-        
         maxHops = int(max(numHops))
-        maxETX = int(max(etxList))
-        hh,bh = np.histogram(numHops, bins=maxHops)
-        he,be = np.histogram(etxList, bins=maxETX)
+        maxETX = int(max(etxList)+1) # the upper integer
+        hh,bh = np.histogram(numHops, bins=range(maxHops))
+        he,be = np.histogram(etxList, bins=range(maxETX))
         plt.xlabel("ETX weight/hop count")
         freq = plt.subplot(1,1,1)
-        ep = freq.plot(be[:len(he)], he, label="ETX")
-        hp = freq.plot(bh[:len(hh)], hh, label="numHops")
         cum = freq.twinx()
         cum.yaxis.tick_right()
         cum.yaxis.set_label_position("right")
@@ -437,14 +485,17 @@ class dataParser():
         cumulativeH = []
         cumulativeE = []
         partialsum = 0.0
-        plt.title("Frequency of route lenght and weight, "+net)
+        plt.title("Frequency of route length and weight, "+net)
         for i in he:
             partialsum += i
             cumulativeE.append(partialsum)
     
         cum.plot(be[:len(cumulativeE)], 
-                np.array(cumulativeE)/partialsum, "--")
+                np.array(cumulativeE)/partialsum, ls="steps--")
                 #label = "Cumulative ETX")
+        freq.plot(be[:len(he)], np.array(he)/partialsum, label="weight", drawstyle="steps")
+        freq.set_xticks(np.array(be[1:])-0.5)
+        freq.set_xticklabels(be[1:], fontsize=16 )
         partialsum = 0.0
         totRoutes = 0
         for i in hh:
@@ -453,11 +504,14 @@ class dataParser():
             totRoutes = partialsum
         cum.set_xlim([0,25])
         cum.plot(bh[:len(cumulativeH)], 
-                np.array(cumulativeH)/partialsum, "--")
+                np.array(cumulativeH)/partialsum, ls="steps--")
                 #label = "Cumulative hopCount")
         #cum.legend(loc="lower right")
+        freq.plot(bh[:len(hh)], np.array(hh)/totRoutes, label="length", drawstyle="steps")
+        freq.xaxis.grid(linestyle='--', linewidth=1, alpha=0.1)
         plt.savefig(routeFolder+"/routes."+C.imageExtension)
     
+
         plt.clf()
         sortedEtx = []
         for l in sorted(numHopMap):
@@ -485,26 +539,27 @@ class dataParser():
         #ax1.set_xticks(range(len(labels)), labels)
         ax1.set_xticklabels(labels, fontsize = 14)
         ax1.boxplot(sortedEtx)
+        ax1.set_ylim([0,40])
         #ax2 = ax1.twiny()
         #ax2.set_xticks(range(0.5, len(freqLabels)))
         #ax2.set_xticklabels(freqLabels, fontsize = 14)
-        #plt.text(0.5, 1.08, "Route weight Vs route lenght",
+        #plt.text(0.5, 1.08, "Route weight Vs route length",
         #                 horizontalalignment='center',
         #                 fontsize=20,
         #                 transform = ax2.transAxes)
-        plt.title("Route weight Vs route lenght")
+        plt.title("Route weight Vs route length")
         plt.savefig(routeFolder+"/boxplot."+C.imageExtension)
         plt.clf()
         
         i = 0
         for h in weightDistributions:
             i += 1
-            plt.plot(bins[:-1], h)
-            #plt.plot(bins[:-1], h, label="route length "+str(i))
+            #plt.plot(bins[:-1], h)
+            plt.plot(bins[:-1], h, label="length "+str(i))
         plt.title("Distribution of the route weights")
         plt.xlabel("Route weight (ETX)")
         plt.ylabel("samples")
-        #plt.legend(loc="upper right")
+        plt.legend(loc="upper right", ncol=2)
         plt.savefig(routeFolder+"/etxWeights."+C.imageExtension)
         plt.clf()
     
@@ -536,43 +591,76 @@ class dataParser():
         #labels=[int(x) for x in (sorted(etxMap))]
         #plt.xticks(range(len(labels)), labels)
         #plt.boxplot(sortedEtxPerCouple)
-        #plt.title("Route weight max - route weight min Vs average lenght")
+        #plt.title("Route weight max - route weight min Vs average length")
         #plt.savefig(routeFolder+"/00-ETX-box.eps")
         #plt.clf()
     
     def getDegreeDistribution(self, net):
         routeFolder = C.resultDir+net+"/ROUTES"
-        degreeDistribution = defaultdict(float)
-        samples = 0.0
+        degreeDistribution = defaultdict(list)
+        degreeDistributionNL = defaultdict(list)
         for scanId in self.routeData:
             graph = self.routeData[scanId]["Graph"]
             for node in graph:
-                degreeDistribution[graph.degree(node)] += 1
-                samples += 1
-        for d in degreeDistribution:
-            degreeDistribution[d] /= samples
-        x = degreeDistribution.keys()
-        y = degreeDistribution.values()
-    
-        #thanks stackoverflow!
+                if len(graph[node]) > 1:
+                    degreeDistributionNL[node].append(len(graph[node]))
+                    degreeDistribution[node].append(len(graph[node]))
+                else:
+                    degreeDistribution[node].append(len(graph[node]))
+
+        degFloat = [int(round(np.average(degreeDistribution[v]),0)) for \
+                v in degreeDistribution]
+        bins = range(1,int(max(degFloat))+1)
+        h,b = np.histogram(degFloat, bins = bins)
+
+        degNLFloat= [np.average(degreeDistributionNL[v]) for \
+                v in degreeDistributionNL]
+        bins = range(1,int(max(degNLFloat))+1)
+        hNL,bNL = np.histogram(degNLFloat, bins = bins)
+
+
+        x = []
+        y = []
+        for i in range(len(h)):
+            if h[i] > 0:
+                y.append(h[i])
+                x.append(b[i])
+        xNL = []
+        yNL = []
+        for i in range(len(hNL)):
+            if hNL[i] > 0:
+                yNL.append(hNL[i])
+                xNL.append(bNL[i])
+        ##thanks stackoverflow!
         fitfunc = lambda p, x: p[0] * x ** (p[1])
         errfunc = lambda p, x, y: (y - fitfunc(p, x))
-        
+        #
         out,success = optimize.leastsq(errfunc, 
                 [1,-1],args=(x,y))
         fittedValue = []
         for v in x:
             fittedValue.append(out[0]*(v**out[1]))
         p = plt.subplot(1,1,1)
-        p.plot(x, degreeDistribution.values(), "bo", markersize=15)#, x, fittedValue)
+        p.plot(x, y, "bo", x, fittedValue, markersize=15)
+        #p.set_xscale("log")
+        #p.set_yscale("log")
+        #p.set_ylim(0,1)
+        ##plt.ylim([0.0001,0])
+        plt.title("Degree relative frequency "+self.net)
+        plt.savefig(routeFolder+"/degree."+C.imageExtension)
+        plt.clf()
+
+        p = plt.subplot(1,1,1)
+        p.plot(xNL, yNL, "bo", markersize=15)#, x, fittedValue)
         p.set_xscale("log")
         p.set_yscale("log")
         ##p.set_ylim(0,1)
         ##plt.ylim([0.0001,0])
-        plt.title("Degree relative frequency ")
-        plt.savefig(routeFolder+"/degree."+C.imageExtension)
+        plt.title("Degree relative frequency, non-leaf subgraph, "+self.net)
+        plt.savefig(routeFolder+"/NLdegree."+C.imageExtension)
         plt.clf()
     
+
     def diffVectors(self, v1,v2):
         if len(v1) != len(v2):
             print >> sys.stderr, "Error, comparing two different arrays", v1, v2
@@ -842,7 +930,7 @@ class dataParser():
 
     def getMPRSets(self, net, mprMode):
         routeFolder = C.resultDir+net+"/ROUTES/"
-        counter = 700 # testing only, limit the number of graphs under analysis
+        counter = 70000 # testing only, limit the number of graphs under analysis
         mpr = []
         IPUDPHEaderSize = 20 + 8 # bytes
         OLSRMsgHeaderSize = 16 # bytes
@@ -851,6 +939,7 @@ class dataParser():
 
         TCPeriod = 5.0 # seconds
         signallingTraffic = []
+        tcMessages = defaultdict(list)
         worstCaseTraffic = []
         mainCSize = defaultdict(list)
         relativeMainCSize = defaultdict(list)
@@ -866,26 +955,34 @@ class dataParser():
                         "nodes!"
                 continue
             mprSets = solveMPRProblem(G, mode=mprMode)
+            self.getMetricRelevance(scanId, mprSets)
             purgedG = purgeNonMPRLinks(G, mprSets)
             globalMPRSet = set()
             for node in mprSets:
-                for m in mprSets[node]:
-                    selectorSet[m].add(node)
+                for mSolution in mprSets[node]:
+                    # this returns an array of frozensets
+                    # i want only the first one (see break)
+                    for m in mSolution:
+                        selectorSet[m].add(node)
+                    break
                 globalMPRSet |= mprSets[node].pop()
             mpr.append(globalMPRSet)
 
             TCtraffic = 0
             for m in selectorSet:
                 TCtraffic += (IPUDPHEaderSize + OLSRMsgHeaderSize + TCMsgHeaderSize +\
-                        len(selectorSet[m])*SelectorFieldSize)/TCPeriod
-            signallingTraffic.append(TCtraffic*len(selectorSet)/len(G.edges()))
+                        len(selectorSet[m])*SelectorFieldSize)
+            signallingTraffic.append(TCtraffic*len(selectorSet))
             #signallingTraffic.append(TCtraffic)
+            tcMessages["MPR"].append(1.0*len(selectorSet)*(len(selectorSet)-1)/len(G.edges()))
+            tcMessages["WC"].append(1.0*len(G)*(len(G)-1)/len(G.edges()))
+
 
             TCtraffic = 0
             for node in G.nodes():
                 TCtraffic += (IPUDPHEaderSize + OLSRMsgHeaderSize + TCMsgHeaderSize +\
-                        len(G[node])*SelectorFieldSize)/TCPeriod
-            worstCaseTraffic.append(TCtraffic*len(G.nodes())/len(G.edges()))
+                        len(G[node])*SelectorFieldSize)
+            worstCaseTraffic.append(TCtraffic*len(G.nodes()))
 
             m, nm = self.computeRobustness(purgedG, tests=30)
 
@@ -908,7 +1005,7 @@ class dataParser():
         plt.savefig(routeFolder+"/robustness-"+mprMode+"."+C.imageExtension)
         plt.clf()
 
-        if self.network == "FFGraz":
+        if self.net == "FFGraz":
             retValue["MPR"]["x"] = range(0,len(mpr)*2, 2)
         else:
             retValue["MPR"]["x"] = range(len(mpr))
@@ -946,7 +1043,7 @@ class dataParser():
             mprDiff.append(float(currDiff))
         retValue["MPRDIFF"]["x"] = range(len(mprDiff)-1)
         retValue["MPRDIFF"]["y"] = mprDiff[1:]
-        #print "XXX", self.net, mprMode,  np.average(mprDiff[1:])
+        print "difference in MPR choice", self.net, mprMode,  np.average(mprDiff[1:])
 
 
         #mprDiff = []
@@ -967,9 +1064,38 @@ class dataParser():
         #plt.ylabel("elements that differ")
         #plt.savefig(routeFolder+"/mpr-diff-"+net+"-"+mprMode+"."+C.imageExtension)
         #plt.clf()
+        bestW = []
+        mprW = []
+        for v in self.weightStats.values():
+            vz = zip(*v)
+            bestW.append(np.average(vz[0]))
+            mprW.append(np.average(vz[1]))
 
-        retValue["STRAFFIC"] = 8*np.average(signallingTraffic)
-        retValue["WTRAFFIC"] = 8*np.average(signallingTraffic)
+        sbestW = []
+        smprW = []
+        diffSamples = 0
+        counter = 0
+        for i in sorted(bestW):
+            sbestW.append(i)
+            smprW.append(mprW[bestW.index(i)])
+            if sbestW[counter] != smprW[counter]:
+                diffSamples += 1
+            counter += 1
+        print "XXX", net, 1.0*diffSamples/counter
+        plt.plot(range(len(sbestW)), sbestW, label="optimal-weight")
+        plt.plot(range(len(smprW)), smprW, label="approx-weight")
+        plt.xlabel("route")
+        plt.ylabel("Route weight")
+        plt.title("Comparison of route weight")
+        plt.legend()
+        plt.savefig(routeFolder+"/weight-approx-"+net+"-"+mprMode+"."+C.imageExtension)
+        plt.clf()
+        self.weightStats = dd1()
+
+        retValue["STRAFFIC"] = np.average(signallingTraffic)
+        retValue["WCTRAFFIC"] = np.average(worstCaseTraffic)
+        retValue["MPRTC"] = np.average(tcMessages["MPR"])
+        retValue["WCTC"] = np.average(tcMessages["WC"])
         return retValue
 
     def computeRobustness(self, graph, tests=100, mode="simple"):
@@ -1054,34 +1180,34 @@ class dataPlot:
             self.fileType = "."+C.imageExtension
 
     def plotData(self, style = "-"):
-	if self.outFile == "":
-	    return
-        dataDimension = 0
-        ax = plt.subplot(111)
-        for y in self.y:
-            l = self.y[dataDimension][1]
-            v = self.y[dataDimension][0]
-            if l != "": 
-                ax.plot(self.x[dataDimension],
-                    v, style, label=l)
-            else :
-                ax.plot(self.x[dataDimension], v, style)
-            dataDimension += 1
-        plt.title(self.title)
-        plt.xlabel(self.xAxisLabel)
-        plt.ylabel(self.yAxisLabel)
-        if self.legendPosition == "aside":
-            box = ax.get_position()
-            ax.set_position([box.x0, box.y0,
-                                 box.width * 0.8, box.height])
-            ax.legend(loc="center left", fancybox=True, 
-                bbox_to_anchor=(1, 0.5), shadow=True, 
-                prop={'size':15}, numpoints=1)
-        else: 
-            plt.legend(loc=self.legendPosition, fancybox=True, 
-                shadow=True, numpoints=1)
-        plt.savefig(self.outFile+self.fileType)
-        plt.clf()
+        if self.outFile == "":
+            return
+            dataDimension = 0
+            ax = plt.subplot(111)
+            for y in self.y:
+                l = self.y[dataDimension][1]
+                v = self.y[dataDimension][0]
+                if l != "": 
+                    ax.plot(self.x[dataDimension],
+                        v, style, label=l)
+                else :
+                    ax.plot(self.x[dataDimension], v, style)
+                dataDimension += 1
+            plt.title(self.title)
+            plt.xlabel(self.xAxisLabel)
+            plt.ylabel(self.yAxisLabel)
+            if self.legendPosition == "aside":
+                box = ax.get_position()
+                ax.set_position([box.x0, box.y0,
+                                     box.width * 0.8, box.height])
+                ax.legend(loc="center left", fancybox=True, 
+                    bbox_to_anchor=(1, 0.5), shadow=True, 
+                    prop={'size':15}, numpoints=1)
+            else: 
+                plt.legend(loc=self.legendPosition, fancybox=True, 
+                    shadow=True, numpoints=1)
+            plt.savefig(self.outFile+self.fileType)
+            plt.clf()
 
 
 def extractDataSeries(retValues):
@@ -1099,6 +1225,7 @@ def extractDataSeries(retValues):
     comparisonFolder = C.resultDir+"/COMPARISON/"
     singleNodeCloseness = dataPlot(C)
     singleNodeBetweenness = dataPlot(C)
+    MPRSigHistogram = defaultdict(list)
 
     for n,v in retValues.items():
         if "etx" in v:	
@@ -1214,6 +1341,14 @@ def extractDataSeries(retValues):
             robustness.legendPosition = "lower left"
             robustness.outFile = comparisonFolder+"graphrobustness"
 
+        if "MPRSIGRFC" in v and "MPRSIGLQ" in v:
+            MPRSigHistogram["RFC"].append(v["MPRSIGRFC"]["MPRTC"])
+            MPRSigHistogram["LQ"].append(v["MPRSIGLQ"]["MPRTC"])
+            MPRSigHistogram["WC"].append(v["MPRSIGLQ"]["WCTC"])
+            MPRSigHistogram["label"].append(n)
+
+
+    
 
     etx.plotData()
     link.plotData()
@@ -1227,12 +1362,24 @@ def extractDataSeries(retValues):
     robustness.plotData()
     singleNodeCloseness.plotData()
     singleNodeBetweenness.plotData()
-        
-
-
-
-        
-        
+ 
+    
+    ax = plt.subplot(111)
+    #ax = fig.subplot(111)
+    shift = 0.3
+    width = 0.3
+    x = np.array(range(1,len(MPRSigHistogram["RFC"])+1))
+    ax.bar(x, MPRSigHistogram["RFC"], width, color = "b", label="RFC")
+    ax.bar(shift + x, MPRSigHistogram["LQ"], width, color = "r", label="lq")
+    ax.bar(2*shift + x, MPRSigHistogram["WC"], width, color = "g", 
+            label="LSR")
+    ax.set_xticks(x+shift)
+    lb = ax.set_xticklabels(MPRSigHistogram["label"])
+    plt.setp(lb,rotation=45)
+    plt.legend(loc="upper left")
+    plt.title("TC messages per link per TC emission interval")
+    plt.savefig(comparisonFolder+"signallingHist."+C.imageExtension)
+    plt.clf()
 
 
 
