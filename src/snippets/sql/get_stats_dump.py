@@ -238,20 +238,20 @@ class dataParser():
         retValue = {}
         for scanId in self.rawData:
             netEtx += self.rawData[scanId]
-        self.getRouteDistributions(self.net)
+        #self.getRouteDistributions(self.net)
         #self.getDegreeDistribution(self.net)
         #self.getMetricRelevance()
         #bins = np.array(range(1,1000))/100.0
         #retValue["etx"] = self.getETXDistribution(netEtx, bins)
         
         #retValue["link"] = self.getLinkDistributions(self.net)
-        #retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
-        retValue["MPRSIGRFC"] = self.getMPRSets(self.net, "RFC")
+        retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
+        #retValue["MPRRFC"] = self.getMPRSets(self.net, "RFC")
         #retValue["MPRRFC"] = mprRFC
-        #retValue["MPRSIGLQ"] = self.getMPRSets(self.net, "lq")
+        #retValue["MPRLQ"] = self.getMPRSets(self.net, "lq")
         #retValue["MPRlq"] = mprLq
         #print "XXX", wc, lqTraffic, rfcTraffic
-        retValue["ROBUSTNESS"] = self.getRobustness()
+        #retValue["ROBUSTNESS"] = self.getRobustness()
         q.put(retValue)
 
     def getMetricRelevance(self, scanId, solution):
@@ -304,7 +304,6 @@ class dataParser():
         return rTable
 	
     def getRobustness(self):
-        robustness = []
         coreRobustness = []
         averageRobustness = defaultdict(list) 
         averageCoreRobustness = defaultdict(list) 
@@ -312,7 +311,6 @@ class dataParser():
             G = self.routeData[scanId]["Graph"]
             r = self.computeRobustness(G, tests=30)[0]
             for k,v in r.items():
-                robustness.append(v)
                 percent = int(100*float(k)/len(G.edges()))
                 averageRobustness[percent].append(v)
                 #x.append(float(k)/len(G.edges()))
@@ -322,10 +320,10 @@ class dataParser():
                 averageCoreRobustness[percent].append(v)
                 coreRobustness.append(v)
         retValue = defaultdict(dict)
-        retValue["RB"]["x"] = averageRobustness.keys()
+        retValue["RB"]["x"] = sorted(averageRobustness.keys())
         retValue["RB"]["y"] = [np.average(averageRobustness[k]) \
                 for k in sorted(averageRobustness.keys())]
-        retValue["CRB"]["x"] = averageRobustness.keys()
+        retValue["CRB"]["x"] = sorted(averageRobustness.keys())
         retValue["CRB"]["y"] = [np.average(averageCoreRobustness[k]) \
                 for k in sorted(averageCoreRobustness.keys())]
         return retValue
@@ -944,6 +942,7 @@ class dataParser():
         mainCSize = defaultdict(list)
         relativeMainCSize = defaultdict(list)
         selectorSetArray = []
+        averageRobustness = defaultdict(list)
         for scanId in self.routeData:
             selectorSet = defaultdict(set)
             if counter <= 0:
@@ -956,7 +955,7 @@ class dataParser():
                 continue
             mprSets = solveMPRProblem(G, mode=mprMode)
             self.getMetricRelevance(scanId, mprSets)
-            purgedG = purgeNonMPRLinks(G, mprSets)
+            purgedG = purgeNonMPRLinks(G, mprSets, weighted=True)
             globalMPRSet = set()
             for node in mprSets:
                 for mSolution in mprSets[node]:
@@ -984,19 +983,24 @@ class dataParser():
                         len(G[node])*SelectorFieldSize)
             worstCaseTraffic.append(TCtraffic*len(G.nodes()))
 
-            m, nm = self.computeRobustness(purgedG, tests=30)
+            r = self.computeRobustness(purgedG, tests=30)[0]
+            for k,v in r.items():
+                percent = int(100*float(k)/len(globalMPRSet))
+                averageRobustness[percent].append(v)
 
-            for k in m:
-                mainCSize[k].append(m[k])
-                relativeMainCSize[float(k)/len(globalMPRSet)].append(m[k])
+            #for k in m:
+            #    mainCSize[k].append(m[k])
+            #    relativeMainCSize[float(k)/len(globalMPRSet)].append(m[k])
             selectorSetArray.append(selectorSet)
 
         retValue = defaultdict(dict)
 
         # FIXME make this threshold dynamic. -r is needed
         tailCut = 5
-        retValue["ROBUSTNESS"]["x"] = sorted(relativeMainCSize.keys()[:-tailCut])
-        retValue["ROBUSTNESS"]["y"] = [np.average(relativeMainCSize[key]) for key in \
+        retValue["ROBUSTNESS"]["x"] = sorted(
+                averageRobustness.keys()[:-tailCut])
+        retValue["ROBUSTNESS"]["y"] = [
+                np.average(averageRobustness[key]) for key in \
                 retValue["ROBUSTNESS"]["x"]]
 
         plt.plot(retValue["ROBUSTNESS"]["x"], retValue["ROBUSTNESS"]["y"])
@@ -1109,12 +1113,11 @@ class dataParser():
                     links.append((l[0], l[1])) 
             else:
                 links.append((l[0], l[1])) 
+            weights.append(float(l[2]["weight"]))
 
-
-            #weights.append(float(l[2]["weight"]))
-        #totWeight = sum(weights)
-        #normalizedWeight = [l/totWeight for l in weights]
-        normalizedWeight = [1.0/len(links) for l in links]
+        totWeight = sum(weights)
+        normalizedWeight = [l/totWeight for l in weights]
+        #normalizedWeight = [1.0/len(links) for l in links]
         custDist = stats.rv_discrete(values=(range(len(links)),
             normalizedWeight), name="custDist")
 
@@ -1149,18 +1152,6 @@ class dataParser():
         for k, tests in mainCSize.items():
             mainCSizeAvg[k] = np.average(tests)
         return mainCSizeAvg, mainNonCSize
-        #    [np.average(mainCSize[k]) for k in sorted(mainCSize.keys())], label="Main C.")
-        #plt.plot(np.array(sorted(mainCSize.keys()))/elen,
-        #    [np.average(mainCSize[k]) for k in sorted(mainCSize.keys())], label="Main C.")
-        ##FIXME add confidence interval
-        ##FIXME do the same for nodes
-
-        ##plt.plot(sorted(mainCSize.keys()),
-        ##    [mainNonCSize[k] for k in sorted(mainNonCSize.keys())],
-        ##    label = "Average minor C.")
-
-        #plt.savefig("/tmp/robustness-"+self.net+"."+C.imageExtension)
-        #plt.clf()
         
 
 class dataPlot:
@@ -1182,32 +1173,32 @@ class dataPlot:
     def plotData(self, style = "-"):
         if self.outFile == "":
             return
-            dataDimension = 0
-            ax = plt.subplot(111)
-            for y in self.y:
-                l = self.y[dataDimension][1]
-                v = self.y[dataDimension][0]
-                if l != "": 
-                    ax.plot(self.x[dataDimension],
-                        v, style, label=l)
-                else :
-                    ax.plot(self.x[dataDimension], v, style)
-                dataDimension += 1
-            plt.title(self.title)
-            plt.xlabel(self.xAxisLabel)
-            plt.ylabel(self.yAxisLabel)
-            if self.legendPosition == "aside":
-                box = ax.get_position()
-                ax.set_position([box.x0, box.y0,
-                                     box.width * 0.8, box.height])
-                ax.legend(loc="center left", fancybox=True, 
-                    bbox_to_anchor=(1, 0.5), shadow=True, 
-                    prop={'size':15}, numpoints=1)
-            else: 
-                plt.legend(loc=self.legendPosition, fancybox=True, 
-                    shadow=True, numpoints=1)
-            plt.savefig(self.outFile+self.fileType)
-            plt.clf()
+        dataDimension = 0
+        ax = plt.subplot(111)
+        for y in self.y:
+            l = self.y[dataDimension][1]
+            v = self.y[dataDimension][0]
+            if l != "": 
+                ax.plot(self.x[dataDimension],
+                    v, style, label=l)
+            else :
+                ax.plot(self.x[dataDimension], v, style)
+            dataDimension += 1
+        plt.title(self.title)
+        plt.xlabel(self.xAxisLabel)
+        plt.ylabel(self.yAxisLabel)
+        if self.legendPosition == "aside":
+            box = ax.get_position()
+            ax.set_position([box.x0, box.y0,
+                                 box.width * 0.8, box.height])
+            ax.legend(loc="center left", fancybox=True, 
+                bbox_to_anchor=(1, 0.5), shadow=True, 
+                prop={'size':15}, numpoints=1)
+        else: 
+            plt.legend(loc=self.legendPosition, fancybox=True, 
+                shadow=True, numpoints=1)
+        plt.savefig(self.outFile+self.fileType)
+        plt.clf()
 
 
 def extractDataSeries(retValues):
@@ -1264,24 +1255,31 @@ def extractDataSeries(retValues):
             mprRFC.xAxisLabel = "snapshot"
             link.legendPosition = "lower right"
 
-        if "MPRlq" in v:
-            mprLq.x.append(v["MPRlq"]["MPR"]["x"])
-            mprLq.y.append((v["MPRlq"]["MPR"]["y"], n))
+        if "MPRLQ" in v:
+            mprLq.x.append(v["MPRLQ"]["MPR"]["x"])
+            mprLq.y.append((v["MPRLQ"]["MPR"]["y"], n))
             mprLq.title = "Size of the global MPR set (lq)"
             mprLq.outFile = comparisonFolder+"mpr-lq"
             mprLq.xAxisLabel = "snapshot"
             link.legendPosition = "lower right"
 
-        if "MPRlq" in v and "MPRRFC" in v:
+        if "MPRLQ" in v and "MPRRFC" in v:
             mprRobustness.x.append(v["MPRRFC"]["ROBUSTNESS"]["x"])
             mprRobustness.y.append((v["MPRRFC"]["ROBUSTNESS"]["y"], n+"-RFC"))
-            mprRobustness.x.append(v["MPRlq"]["ROBUSTNESS"]["x"])
-            mprRobustness.y.append((v["MPRlq"]["ROBUSTNESS"]["y"], n+"-lq"))
+            mprRobustness.x.append(v["MPRLQ"]["ROBUSTNESS"]["x"])
+            mprRobustness.y.append((v["MPRLQ"]["ROBUSTNESS"]["y"], n+"-lq"))
             mprRobustness.title = "Robustness metric of the MPR sub-graph"
             mprRobustness.outFile = comparisonFolder+"mprrobustness"
-            mprRobustness.xAxisLabel = "Failed links/mpr number"
+            mprRobustness.xAxisLabel = "100* Failed links/mpr number"
             mprRobustness.yAxisLabel = "Robustness"
-            mprRobustness.legendPosition = "upper right"
+            mprRobustness.legendPosition = "lower left"
+
+            if "MPRSIGRFC" in v["MPRRFC"] and "MPRSIGLQ" in v["MPRLQ"]:
+                MPRSigHistogram["RFC"].append(v["MPRSIGRFC"]["MPRTC"])
+                MPRSigHistogram["LQ"].append(v["MPRSIGLQ"]["MPRTC"])
+                MPRSigHistogram["WC"].append(v["MPRSIGLQ"]["WCTC"])
+                MPRSigHistogram["label"].append(n)
+
 
         if "CENTRALITY" in v:
             singleNodeCloseness.x.append(v["CENTRALITY"]["SINGLEC"]["x"])
@@ -1337,16 +1335,9 @@ def extractDataSeries(retValues):
             robustness.x.append(v["ROBUSTNESS"]["CRB"]["x"])
             robustness.y.append((v["ROBUSTNESS"]["CRB"]["y"],n+" core"))
             robustness.title = "Robustness metrics"
-            robustness.xAxisLabel = "Fraction of failed links"
+            robustness.xAxisLabel = "Failed links (%)"
             robustness.legendPosition = "lower left"
             robustness.outFile = comparisonFolder+"graphrobustness"
-
-        if "MPRSIGRFC" in v and "MPRSIGLQ" in v:
-            MPRSigHistogram["RFC"].append(v["MPRSIGRFC"]["MPRTC"])
-            MPRSigHistogram["LQ"].append(v["MPRSIGLQ"]["MPRTC"])
-            MPRSigHistogram["WC"].append(v["MPRSIGLQ"]["WCTC"])
-            MPRSigHistogram["label"].append(n)
-
 
     
 
@@ -1354,7 +1345,7 @@ def extractDataSeries(retValues):
     link.plotData()
     mprLq.plotData()
     mprRFC.plotData()
-    mprRobustness.plotData(style="o")
+    mprRobustness.plotData()
     closeness.plotData()
     betweenness.plotData()
     betweennessD.plotData()
@@ -1364,22 +1355,23 @@ def extractDataSeries(retValues):
     singleNodeBetweenness.plotData()
  
     
-    ax = plt.subplot(111)
-    #ax = fig.subplot(111)
-    shift = 0.3
-    width = 0.3
-    x = np.array(range(1,len(MPRSigHistogram["RFC"])+1))
-    ax.bar(x, MPRSigHistogram["RFC"], width, color = "b", label="RFC")
-    ax.bar(shift + x, MPRSigHistogram["LQ"], width, color = "r", label="lq")
-    ax.bar(2*shift + x, MPRSigHistogram["WC"], width, color = "g", 
-            label="LSR")
-    ax.set_xticks(x+shift)
-    lb = ax.set_xticklabels(MPRSigHistogram["label"])
-    plt.setp(lb,rotation=45)
-    plt.legend(loc="upper left")
-    plt.title("TC messages per link per TC emission interval")
-    plt.savefig(comparisonFolder+"signallingHist."+C.imageExtension)
-    plt.clf()
+    if len(MPRSigHistogram) != 0:
+        ax = plt.subplot(111)
+        #ax = fig.subplot(111)
+        shift = 0.3
+        width = 0.3
+        x = np.array(range(1,len(MPRSigHistogram["RFC"])+1))
+        ax.bar(x, MPRSigHistogram["RFC"], width, color = "b", label="RFC")
+        ax.bar(shift + x, MPRSigHistogram["LQ"], width, color = "r", label="lq")
+        ax.bar(2*shift + x, MPRSigHistogram["WC"], width, color = "g", 
+                label="LSR")
+        ax.set_xticks(x+shift)
+        lb = ax.set_xticklabels(MPRSigHistogram["label"])
+        plt.setp(lb,rotation=45)
+        plt.legend(loc="upper left")
+        plt.title("TC messages per link per TC emission interval")
+        plt.savefig(comparisonFolder+"signallingHist."+C.imageExtension)
+        plt.clf()
 
 
 
