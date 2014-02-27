@@ -238,14 +238,14 @@ class dataParser():
         retValue = {}
         for scanId in self.rawData:
             netEtx += self.rawData[scanId]
-        #self.getRouteDistributions(self.net)
-        #self.getDegreeDistribution(self.net)
+        self.getRouteDistributions(self.net)
+        self.getDegreeDistribution(self.net)
         #self.getMetricRelevance()
         #bins = np.array(range(1,1000))/100.0
         #retValue["etx"] = self.getETXDistribution(netEtx, bins)
         
         #retValue["link"] = self.getLinkDistributions(self.net)
-        retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
+        #retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
         #retValue["MPRRFC"] = self.getMPRSets(self.net, "RFC")
         #retValue["MPRRFC"] = mprRFC
         #retValue["MPRLQ"] = self.getMPRSets(self.net, "lq")
@@ -633,6 +633,7 @@ class dataParser():
         fitfunc = lambda p, x: p[0] * x ** (p[1])
         errfunc = lambda p, x, y: (y - fitfunc(p, x))
         #
+        rcParams.update({'font.size': 35})
         out,success = optimize.leastsq(errfunc, 
                 [1,-1],args=(x,y))
         fittedValue = []
@@ -644,7 +645,7 @@ class dataParser():
         #p.set_yscale("log")
         #p.set_ylim(0,1)
         ##plt.ylim([0.0001,0])
-        plt.title("Degree relative frequency "+self.net)
+        plt.title("Degree relative frequency (%)")
         plt.savefig(routeFolder+"/degree."+C.imageExtension)
         plt.clf()
 
@@ -654,9 +655,10 @@ class dataParser():
         p.set_yscale("log")
         ##p.set_ylim(0,1)
         ##plt.ylim([0.0001,0])
-        plt.title("Degree relative frequency, non-leaf subgraph, "+self.net)
+        plt.title("Degree relative frequency, non-leaf subgraph")
         plt.savefig(routeFolder+"/NLdegree."+C.imageExtension)
         plt.clf()
+        rcParams.update({'font.size': 20})
     
 
     def diffVectors(self, v1,v2):
@@ -1146,7 +1148,7 @@ class dataParser():
                 if len(compSizes) == 0:
                     mainNonCSize[k].append(0)
                 else:
-		    mainNonCSize[k].append(
+                    mainNonCSize[k].append(
                         np.average([len(r) for r in compList[1:]])/nlen)
         mainCSizeAvg = {}
         for k, tests in mainCSize.items():
