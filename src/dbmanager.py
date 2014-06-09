@@ -11,13 +11,19 @@ import sys
 Base = declarative_base()
 
 # objects representing the local database 
-
 class scan(Base):
     __tablename__ = 'scan'
     Id = Column(Integer, primary_key=True)
     time = Column(DateTime, default=datetime.now)
     scan_type = Column(String(10), default="ETX")
     network = Column(String(10), default="NINUX")
+
+class person(Base):
+    __tablename__= 'person'
+    Id = Column(Integer, primary_key=True)
+    network = Column(String(10), default="NINUX")
+    username = Column(String(256), default="")
+    email = Column(String(256), default="")
 
 class topo_file(Base):
     __tablename__= 'topo_file'
@@ -31,11 +37,15 @@ class node(Base):
     Id = Column(String(50), primary_key=True)
     scan_Id = Column(Integer, ForeignKey('scan.Id'), primary_key=True)
     name = Column(String(50))
-    owner = Column(Integer)
-    manager = Column(Integer)
+    owner_Id = Column(Integer, ForeignKey(person.Id))
+    manager_Id = Column(Integer, ForeignKey(person.Id))
     lat = Column(Float)
     lon = Column(Float)
     scan_Id_r = relationship(scan)
+    owner_Id_r = relationship(person, 
+            primaryjoin="person.Id == node.owner_Id")
+    manager_Id_r = relationship(person,
+            primaryjoin="person.Id == node.manager_Id")
 
 class network(Base):
     __tablename__ = 'network'
@@ -85,10 +95,38 @@ def addGraphToDB(graph, localSession, scanId):
     """ transforms a nx graph in db entries """
 
     nodes = {}
+    people = {}
     for edge in graph.edges(data=True):
         sid = edge[0]
         did = edge[1]
+        sperson = (graph.node[edge[0]]["owner"],graph.node[edge[0]]["email"])
+        dperson = (graph.node[edge[1]]["owner"],graph.node[edge[1]]["email"])
         etxValue = edge[2]['weight']
+        if sperson not in people:
+            # it's an unscanned new person, is it in the database?
+            newSPerson = localSession.query(person).filter(
+                    and_(person.username==sperson[0],
+                        person.email==sperson[1])).first()
+            if not newSPerson:
+                # not in the db, create new person
+                newSPerson = person(username=sperson[0], email=sperson[1])
+            people[sperson] = newSPerson
+        else:
+            newSPerson = people[sperson]
+
+        if dperson not in people:
+            # it's an unscanned new person, is it in the database?
+            newDPerson = localSession.query(person).filter(\
+                    and_(person.username==dperson[0],
+                        person.email==dperson[1])).first()
+            if not newDPerson:
+                # not in the db, create new person
+                newDPerson = person(username=dperson[0], email=dperson[1])
+            people[dperson] = newDPerson
+        else:
+            newDPerson = people[dperson]
+
+        #TODO  I have get its Id 
         if sid not in nodes.keys():
             # it's an unscanned new node, is it in the database?
             presentNode = localSession.query(node).filter(\
@@ -98,7 +136,8 @@ def addGraphToDB(graph, localSession, scanId):
                 sname = ""
                 if 'name' in graph.node[sid]:
                     sname = graph.node[sid]['name']
-                tmps = node(Id=sid, scan_Id_r=scanId, name=sname)
+                tmps = node(Id=sid, scan_Id_r=scanId, name=sname,
+                        owner_Id_r=newSPerson)
                 nodes[sid] = tmps 
             else:
                 nodes[sid] = presentNode
@@ -115,7 +154,8 @@ def addGraphToDB(graph, localSession, scanId):
                 dname = ""
                 if 'name' in graph.node[did]:
                     dname = graph.node[did]['name']
-                tmpd = node(Id=did, scan_Id_r=scanId, name=dname)
+                tmpd = node(Id=did, scan_Id_r=scanId, name=dname, 
+                        owner_Id_r=newDPerson)
                 nodes[did] = tmpd 
             else:
                 nodes[did] = presentNode

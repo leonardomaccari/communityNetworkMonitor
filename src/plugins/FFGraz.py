@@ -25,6 +25,9 @@ class FFGraz(plugin):
         self.localSession = lc
         self.parser = parser
         self.url=parser.get('FFGraz', 'baseTopoURL')
+        self.pseudonymDumpFile = None
+        self.pseudonymFile = None
+        self.ownerPseudonymDict = {}
         self.enabled, logLevel, self.pluginName = plugin.baseInitialize(self, 
                 parser, __file__, lc)
         self.logger = logging.getLogger(self.pluginName)
@@ -126,6 +129,7 @@ class FFGraz(plugin):
                 simpleG.remove_edge(e[0], e[1])
         newFile = topo_file(file_url=fileName, scan_Id_r=newScan, time=newDate)
         self.localSession.add(newFile)
+        #FIXME NEed to add owners and emails here
         addGraphToDB(simpleG, self.localSession, newScan)
         f.close()
         os.remove(topoFile[0])

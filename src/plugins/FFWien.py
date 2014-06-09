@@ -32,6 +32,9 @@ class FFWien(plugin):
         self.localSession = lc
         self.parser = parser
         self.debug = False # just a shortcut
+        self.pseudonymDumpFile = None
+        self.pseudonymFile = None
+        self.ownerPseudonymDict = {}
         self.enabled, logLevel, self.pluginName = plugin.baseInitialize(self, 
                 parser, __file__, lc)
         if logLevel < logging.INFO:
@@ -425,6 +428,7 @@ class FFWien(plugin):
                     
             self.logger.debug("OLSR %d, %d, %d", numLinks, 
                     numDoubleLinks, numReverseLinks)
+        #FIXME Need to add owners and emails here
         addGraphToDB(G, self.localSession, newScan)
         olsrDump.close()
         self.logger.info("Ok, completed the topology download:"+\

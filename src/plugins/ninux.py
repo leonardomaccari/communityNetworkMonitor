@@ -15,8 +15,11 @@ class ninux(plugin):
     def initialize(self, parser, lc):
         self.localSession = lc
         self.parser = parser
-        self.enabled, logLevel, self.pluginName = plugin.baseInitialize(self, 
-                parser, __file__, lc)
+        self.pseudonymDumpFile = None
+        self.pseudonymFile = None
+        self.ownerPseudonymDict = {}
+        self.enabled, logLevel, self.pluginName = \
+                plugin.baseInitialize(self, parser, __file__, lc)
         self.logger = logging.getLogger(self.pluginName)
         self.logger.setLevel(logLevel)
         try:
@@ -48,7 +51,10 @@ class ninux(plugin):
         session = DBSession()
         ### FIXME this should be ORM-ed, not just raw SQL as it is now
         etxQuery = """select snode.id as sid, snode.name as sname, 
-        dnode.id as did, dnode.name as dname, link.etx as etx_v
+        snode.owner as sowner, snode.email as semail,
+        dnode.id as did, dnode.name as dname,
+        dnode.owner as downer, dnode.email as demail,
+        link.etx as etx_v
         from nodeshot_node as snode join nodeshot_device as sdev join
         nodeshot_interface as sifc join nodeshot_link as link join
         nodeshot_interface as difc join nodeshot_device as ddev join
@@ -57,7 +63,8 @@ class ninux(plugin):
         difc.id = link.to_interface_id and difc.device_id = ddev.id and
         ddev.node_id = dnode.id"""
     
-        q = session.query("sid", "sname", "did", "dname", "etx_v").\
+        q = session.query("sid", "sname", "sowner", "semail", "did", 
+                "dname", "downer", "demail", "etx_v").\
             from_statement(etxQuery)
 
         try:
@@ -73,13 +80,19 @@ class ninux(plugin):
         newScan = scan(network=self.pluginName)
         self.localSession.add(newScan)
         g = nx.Graph()
-        for [sid, sn, did, dn, etxValue] in q:
+        fromSet = set()
+        for [sid, sn, sown, semail, did, dn, down, demail, etxValue] in q:
             # some strings in ninux DB are encoded not in weird
             # encodings, guess the encoding and convert
             sname = sn.decode(chardet.detect(sn)['encoding'])
             dname = dn.decode(chardet.detect(dn)['encoding'])
-            g.add_node(sid, name=sname)
-            g.add_node(did, name=dname)
+            g.add_node(sid, name=sname, owner=sown, email=semail)
+            g.add_node(did, name=dname, owner=down, email=demail)
             g.add_edge(sid,did,weight=etxValue)
+            fromSet.add(sown + " " + semail)
+            fromSet.add(down + " " + demail)
+        self.dumpPseudonym(list(fromSet))
+
         addGraphToDB(g, self.localSession, newScan)
+
 

@@ -3,7 +3,9 @@ import logging
 import os
 import sys
 import time
+import simplejson
 from threading import Thread
+from ConfigParser import NoOptionError
 
 class plugin(Thread):
     disabledMessage = "Plugin disabled, doing nothing"
@@ -11,7 +13,8 @@ class plugin(Thread):
     session = None
 
     def __init__(self):
-        print >> sys.stderr, "Error, you should not call init in the plugin class"
+        print >> sys.stderr, "Error, you should not call ",\
+                "init in the plugin class"
         sys.exit(1)
     
     def baseInitialize(self, parser,  name, lc):
@@ -54,7 +57,54 @@ class plugin(Thread):
         except:
             pass
 
+        try:
+            pseudonymFileName = parser.get(pluginName, 'pseudonymfile')
+        except NoOptionError: #FIXME all the try should match this!!
+            # this code takes the input file, which is expected to be a 
+            # json (possibly saved with simplejson.dump() where 
+            # a map of the kind {"FromStringX":"FromString"} is saved
+            # each FromStringX is mapped into the FromString. 
+            # You can generate the json with the option 'dumpnames' but
+            # you have to process it to merge multiple pseudonyms for the 
+            # same person. See README for how to do this
+            # FIXME write readme
+            pseudonymFileName = ""
+            pass
+        if pseudonymFileName != "":
+            try:
+                self.pseudonymFile = open(pseudonymFileName, "r")
+            except IOError:
+                self.logger.error("Could not open file specified",\
+                        "in pseudonymfile option.")
+                sys.exit(1)
+
+        if self.pseudonymFile != None:
+            try:
+                self.ownerPseudonymDict = simplejson.load(self.pseudonymFile)
+            except simplejson.JSONDecodeError:
+                sys.logger.error("The file specified in the pseudonymfile"+\
+                        "option is a malformed JSON!")
+                sys.exit(1)
+        try:
+            pseudonymDumpFileName = parser.get(pluginName, 'pseudonymdump')
+        except NoOptionError: 
+            pseudonymDumpFileName = ""
+        if pseudonymDumpFileName != "":
+            try:
+                self.pseudonymDumpFile = open(pseudonymDumpFileName, "w")
+            except IOError:
+                self.logger.error("Could not open file specified"+\
+                        "in pseudonymdump option:"+pseudonymDumpFileName)
+                sys.exit(1)
+
         return enabled, returnLevel, pluginName
+
+    def dumpPseudonym(self, d):
+        """ we dump the pseudonym file, only once """
+        if self.pseudonymDumpFile != None and not \
+                self.pseudonymDumpFile.closed:
+            simplejson.dump(d, self.pseudonymDumpFile)
+            self.pseudonymDumpFile.close()
 
     def addNetwork(self):
         if self.enabled:
@@ -99,3 +149,8 @@ class plugin(Thread):
                     time.sleep(1)
                     if self.exitAll:
                         break
+        if self.pseudonymFile != None and not self.pseudonymFile.closed:
+            self.pseudonymFile.close()
+        if self.pseudonymDumpFile != None and not \
+                self.pseudonymDumpFile.closed:
+            self.pseudonymDumpFile.close()
