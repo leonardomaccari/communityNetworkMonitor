@@ -89,8 +89,8 @@ class ninux(plugin):
             g.add_node(sid, name=sname, owner=sown, email=semail)
             g.add_node(did, name=dname, owner=down, email=demail)
             g.add_edge(sid,did,weight=etxValue)
-            fromSet.add(sown + " " + semail)
-            fromSet.add(down + " " + demail)
+            fromSet.add(sown + " " + "<"+semail+">")
+            fromSet.add(down + " " + "<"+demail+">")
         self.dumpPseudonym(list(fromSet))
 
         addGraphToDB(g, self.localSession, newScan)
