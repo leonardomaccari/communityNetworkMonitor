@@ -1008,7 +1008,10 @@ class dataParser():
                 continue
             mprSets = solveMPRProblem(G, mode=mprMode)
             G = self.routeData[scanId]["Graph"]
-            self.weightStats = routeComparison(G, mprSets)
+            weightStats = routeComparison(G, mprSets)
+            for couple, route in weightStats.items():
+                self.weightStats[couple] += route
+
             purgedG = purgeNonMPRLinks(G, mprSets, weighted=True)
             globalMPRSet = set()
             for node in mprSets:
