@@ -1299,6 +1299,28 @@ class dataPlot:
         plt.clf()
 
 
+    def saveData(self):
+        if self.outFile == "":
+            return
+        dataDimension = len(self.x[0])
+        outFileName = self.outFile+".txt"
+        #FIXME try/catch this and do something
+        outFile = open(outFileName, "w")
+
+        print >> outFile, self.xAxisLabel.ljust(10),
+
+        for l in self.y:
+            print  >> outFile, l[1].ljust(10),
+        print >> outFile 
+        counter = 0
+        for counter in range(dataDimension):
+            print  >> outFile, str(self.x[0][counter]).ljust(10),
+            for l in self.y:
+                print  >> outFile, str(l[0][counter]).ljust(10),
+            print >> outFile
+        outFile.close()
+
+
 def extractDataSeries(retValues):
 
     etx = dataPlot(C)
@@ -1479,8 +1501,11 @@ def extractDataSeries(retValues):
     singleNodeCloseness.plotData()
     singleNodeBetweenness.plotData()
     ownership.plotData()
+    ownership.saveData()
     ownerCentrality.plotData()
+    ownerCentrality.saveData()
     ownerRobustness.plotData()
+    ownerRobustness.saveData()
  
     
     if len(MPRSigHistogram) != 0:
