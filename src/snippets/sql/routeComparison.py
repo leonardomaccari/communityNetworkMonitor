@@ -34,7 +34,7 @@ def routeComparison(G, solution, metric = "weight"):
     rTable = {}
     for node in G.nodes():
         rTable[node] = getRoutingTable(node,
-               getNodeView(node, solution,  G))
+               getNodeView(node, solution,  G, metric=metric))
     for i in range(len(G)):
         source = G.nodes()[i]
         for k in range(i+1, len(G)):
