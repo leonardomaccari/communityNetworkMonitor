@@ -270,8 +270,8 @@ class dataParser():
             netEtx += self.rawData[scanId]
         self.getRouteDistributions(self.net)
         self.getDegreeDistribution(self.net)
-        retValue["OWNERDISTRIBUTION"] = self.getOwnerDistribution(self.net)
-        retValue["OWNERCENTRALITY"] = self.getOwnerCentrality(self.net)
+        #retValue["OWNERDISTRIBUTION"] = self.getOwnerDistribution(self.net)
+        #retValue["OWNERCENTRALITY"] = self.getOwnerCentrality(self.net)
         #self.routeComparison()
         #bins = np.array(range(1,1000))/100.0
         #retValue["etx"] = self.getETXDistribution(netEtx, bins)
@@ -1013,7 +1013,7 @@ class dataParser():
             for couple, route in weightStats.items():
                 self.weightStats[couple] += route
 
-            purgedG = purgeNonMPRLinks(G, mprSets, weighted=True)
+            purgedG = purgeNonMPRLinks(G, mprSets, metric="weight")
             globalMPRSet = set()
             for node in mprSets:
                 for mSolution in mprSets[node]:

@@ -16,7 +16,7 @@ def navigateGraph(rTable,  source, dest, sol = []):
     It navigates the routing tables of each node and finds its way to 
     destination. 
     TODO: it is a recursive function and it passes the whole routing table
-    as a parameter. this is not momory-efficient"""
+    as a parameter. this is not memory-efficient"""
 
     if source == dest:
         return sol
@@ -28,6 +28,7 @@ def navigateGraph(rTable,  source, dest, sol = []):
 def routeComparison(G, solution, metric = "weight"):
     """ Compare the best route available with the route chosen by the 
     routing protocol """
+
     weightStats = defaultdict(list)
     allp = nx.all_pairs_dijkstra_path_length(G, weight=metric)
     rTable = {}
@@ -41,7 +42,7 @@ def routeComparison(G, solution, metric = "weight"):
             sol = navigateGraph(rTable, source, target, [source])
             weight = 0
             for k in range(len(sol)-1):
-                w = G[sol[k]][sol[k+1]]['weight']
+                w = G[sol[k]][sol[k+1]][metric]
                 weight += w
             weightStats[(source,target)].append(
                     [allp[source][target],weight])
