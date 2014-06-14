@@ -25,6 +25,8 @@ from scipy import stats
 from copy import copy
 import simplejson
 
+from routeComparison import * 
+
 try:
     from groupMetrics import computeGroupMetrics, groupMetricForOneGroup
     from mpr import solveMPRProblem, purgeNonMPRLinks
@@ -267,69 +269,22 @@ class dataParser():
             netEtx += self.rawData[scanId]
         self.getRouteDistributions(self.net)
         self.getDegreeDistribution(self.net)
-        #self.getMetricRelevance()
+        #retValue["OWNERDISTRIBUTION"] = self.getOwnerDistribution(self.net)
+        #retValue["OWNERCENTRALITY"] = self.getOwnerCentrality(self.net)
+        #self.routeComparison()
         #bins = np.array(range(1,1000))/100.0
         #retValue["etx"] = self.getETXDistribution(netEtx, bins)
         
         #retValue["link"] = self.getLinkDistributions(self.net)
         #retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
-        #retValue["MPRRFC"] = self.getMPRSets(self.net, "RFC")
+        retValue["MPRRFC"] = self.getMPRSets(self.net, "RFC")
         #retValue["MPRRFC"] = mprRFC
         #retValue["MPRLQ"] = self.getMPRSets(self.net, "lq")
         #retValue["MPRlq"] = mprLq
         #print "XXX", wc, lqTraffic, rfcTraffic
         #retValue["ROBUSTNESS"] = self.getRobustness()
         q.put(retValue)
-
-    def getMetricRelevance(self, scanId, solution):
-        G = self.routeData[scanId]["Graph"]
-        allp = nx.all_pairs_dijkstra_path_length(G)
-        rTable = {}
-        for node in G.nodes():
-            rTable[node] = self.getRoutingTable(node,
-                   self.getNodeView(node, solution,  G))
-        self.rTable = rTable
-        for i in range(len(G)):
-            source = G.nodes()[i]
-            for k in range(i+1, len(G)):
-                target = G.nodes()[k]
-                sol = self.navigateGraph(source, target, [source])
-                weight = 0
-                #print "XX1", sol 
-                #print "XX2", allp[source][target]
-                for k in range(len(sol)-1):
-                    w = G[sol[k]][sol[k+1]]['weight']
-                    weight += w
-                self.weightStats[(source,target)].append(
-                        [allp[source][target],weight])
-       
-
-    def navigateGraph(self, source, dest, sol = []):
-        if source == dest:
-            return sol
-        else:
-            nh = self.rTable[source][dest]
-            sol.append(nh)
-            return self.navigateGraph(nh, dest, sol)
-
-    def getNodeView(self, node, solution,  G):
-        purgedGraph = purgeNonMPRLinks(G, solution, weighted=True)
-        for neigh in G[node]:
-            purgedGraph.add_edge(node, neigh,
-                  weight=G[node][neigh]["weight"])
-            for n2 in G[neigh]:
-                purgedGraph.add_edge(neigh, n2,
-                      weight=G[neigh][n2]["weight"])
-        return purgedGraph
-
-    def getRoutingTable(self, node, G):
-        shortestPaths = nx.single_source_dijkstra(G, node)[1]
-        rTable = {}
-        for dest, path in shortestPaths.items():
-            if len(path) > 1:
-                rTable[dest] = path[1]
-        return rTable
-	
+   
     def getRobustness(self):
         coreRobustness = []
         averageRobustness = defaultdict(list) 
@@ -1052,7 +1007,8 @@ class dataParser():
                         "nodes!"
                 continue
             mprSets = solveMPRProblem(G, mode=mprMode)
-            self.getMetricRelevance(scanId, mprSets)
+            G = self.routeData[scanId]["Graph"]
+            self.weightStats = routeComparison(G, mprSets)
             purgedG = purgeNonMPRLinks(G, mprSets, weighted=True)
             globalMPRSet = set()
             for node in mprSets:
