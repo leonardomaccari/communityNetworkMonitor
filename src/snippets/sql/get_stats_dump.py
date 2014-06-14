@@ -25,6 +25,7 @@ from scipy import stats
 from copy import copy
 import simplejson
 
+from dataPlot import dataPlot
 from routeComparison import * 
 
 try:
@@ -269,8 +270,8 @@ class dataParser():
             netEtx += self.rawData[scanId]
         self.getRouteDistributions(self.net)
         self.getDegreeDistribution(self.net)
-        #retValue["OWNERDISTRIBUTION"] = self.getOwnerDistribution(self.net)
-        #retValue["OWNERCENTRALITY"] = self.getOwnerCentrality(self.net)
+        retValue["OWNERDISTRIBUTION"] = self.getOwnerDistribution(self.net)
+        retValue["OWNERCENTRALITY"] = self.getOwnerCentrality(self.net)
         #self.routeComparison()
         #bins = np.array(range(1,1000))/100.0
         #retValue["etx"] = self.getETXDistribution(netEtx, bins)
@@ -1210,76 +1211,6 @@ class dataParser():
             mainCSizeAvg[k] = np.average(tests)
         return mainCSizeAvg, mainNonCSize
         
-
-class dataPlot:
-
-    def __init__(self, C=None):
-        self.x = []
-        self.y = []
-        self.title = ""
-        self.xAxisLabel = ""
-        self.yAxisLabel = ""
-        self.outFile = ""
-        self.key = []
-        self.legendPosition = "center right"
-        if C == None:
-            self.fileType = ".png"
-        else:
-            self.fileType = "."+C.imageExtension
-
-    def plotData(self, style = "-"):
-        if self.outFile == "":
-            return
-        dataDimension = 0
-        ax = plt.subplot(111)
-        for y in self.y:
-            l = self.y[dataDimension][1]
-            v = self.y[dataDimension][0]
-            if l != "": 
-                ax.plot(self.x[dataDimension],
-                    v, style, label=l)
-            else :
-                ax.plot(self.x[dataDimension], v, style)
-            dataDimension += 1
-        plt.title(self.title)
-        plt.xlabel(self.xAxisLabel)
-        plt.ylabel(self.yAxisLabel)
-        if self.legendPosition == "aside":
-            box = ax.get_position()
-            ax.set_position([box.x0, box.y0,
-                                 box.width * 0.8, box.height])
-            ax.legend(loc="center left", fancybox=True, 
-                bbox_to_anchor=(1, 0.5), shadow=True, 
-                prop={'size':15}, numpoints=1)
-        else: 
-            plt.legend(loc=self.legendPosition, fancybox=True, 
-                shadow=True, numpoints=1)
-        plt.savefig(self.outFile+self.fileType)
-        plt.clf()
-
-
-    def saveData(self):
-        if self.outFile == "":
-            return
-        dataDimension = len(self.x[0])
-        outFileName = self.outFile+".txt"
-        #FIXME try/catch this and do something
-        outFile = open(outFileName, "w")
-
-        print >> outFile, self.xAxisLabel.ljust(10),
-
-        for l in self.y:
-            print  >> outFile, l[1].ljust(10),
-        print >> outFile 
-        counter = 0
-        for counter in range(dataDimension):
-            print  >> outFile, str(self.x[0][counter]).ljust(10),
-            for l in self.y:
-                print  >> outFile, str(l[0][counter]).ljust(10),
-            print >> outFile
-        outFile.close()
-
-
 def extractDataSeries(retValues):
 
     etx = dataPlot(C)
