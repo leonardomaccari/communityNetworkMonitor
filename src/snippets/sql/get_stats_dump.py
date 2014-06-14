@@ -1105,7 +1105,6 @@ class dataParser():
             mprDiff.append(float(currDiff))
         retValue["MPRDIFF"]["x"] = range(len(mprDiff)-1)
         retValue["MPRDIFF"]["y"] = mprDiff[1:]
-        print "difference in MPR choice", self.net, mprMode,  np.average(mprDiff[1:])
 
 
         #mprDiff = []
@@ -1143,7 +1142,6 @@ class dataParser():
             if sbestW[counter] != smprW[counter]:
                 diffSamples += 1
             counter += 1
-        print "XXX", net, 1.0*diffSamples/counter
         plt.plot(range(len(sbestW)), sbestW, label="optimal-weight")
         plt.plot(range(len(smprW)), smprW, label="approx-weight")
         plt.xlabel("route")
