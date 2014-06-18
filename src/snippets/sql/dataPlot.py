@@ -62,7 +62,8 @@ class dataPlot:
         """ save a text file with the data """
         if self.outFile == "":
             return
-        dataDimension = len(self.x[0])
+        dataDimension = max([len(v) for v in self.x])
+        maxDimension = sorted(self.x,  key=lambda x: len(x))[-1]
         outFileName = self.outFile+".txt"
         try:
             outFile = open(outFileName, "w")
@@ -77,9 +78,13 @@ class dataPlot:
         print >> outFile 
         counter = 0
         for counter in range(dataDimension):
-            print  >> outFile, str(self.x[0][counter]).ljust(10),
+            print  >> outFile, str(maxDimension[counter]).ljust(10),
             for l in self.y:
-                print  >> outFile, str(l[0][counter]).ljust(10),
+                if len(l[0]) > counter:
+                    print  >> outFile, str(l[0][counter]).ljust(10),
+                else:
+                    print  >> outFile, "".ljust(10),
+
             print >> outFile
         outFile.close()
 
