@@ -11,8 +11,8 @@ import networkx as nx
 import matplotlib
 # use the Agg backend, not X, for ssh shells
 matplotlib.use('Agg')
-matplotlib.rcParams['figure.figsize'] = 12, 12 
-matplotlib.rcParams['figure.dpi'] = 1200
+matplotlib.rcParams['figure.figsize'] = 20, 20 
+matplotlib.rcParams['figure.dpi'] = 300
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from scipy import optimize
@@ -269,21 +269,17 @@ class dataParser():
         for scanId in self.rawData:
             netEtx += self.rawData[scanId]
         self.getRouteDistributions(self.net)
-        self.getDegreeDistribution(self.net)
+        #retValue["degree"] = self.getDegreeDistribution(self.net)
         #retValue["OWNERDISTRIBUTION"] = self.getOwnerDistribution(self.net)
         #retValue["OWNERCENTRALITY"] = self.getOwnerCentrality(self.net)
         #self.routeComparison()
         #bins = np.array(range(1,1000))/100.0
         #retValue["etx"] = self.getETXDistribution(netEtx, bins)
-        
         #retValue["link"] = self.getLinkDistributions(self.net)
         #retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
         retValue["MPRRFC"] = self.getMPRSets(self.net, "RFC")
-        #retValue["MPRRFC"] = mprRFC
-        #retValue["MPRLQ"] = self.getMPRSets(self.net, "lq")
-        #retValue["MPRlq"] = mprLq
-        #print "XXX", wc, lqTraffic, rfcTraffic
-        #retValue["ROBUSTNESS"] = self.getRobustness()
+        retValue["MPRLQ"] = self.getMPRSets(self.net, "lq")
+        retValue["ROBUSTNESS"] = self.getRobustness()
         q.put(retValue)
    
     def getRobustness(self):
@@ -472,11 +468,18 @@ class dataParser():
             cumulativeE.append(partialsum)
     
         cum.plot(be[:len(cumulativeE)], 
-                np.array(cumulativeE)/partialsum, ls="steps--")
+                np.array(cumulativeE)/partialsum, 
+                color="blue", ls="steps--", linewidth=6)
                 #label = "Cumulative ETX")
-        freq.plot(be[:len(he)], np.array(he)/partialsum, label="weight", drawstyle="steps")
+        freq.plot(be[:len(he)], np.array(he)/partialsum, 
+                label="weight", drawstyle="steps", color="blue",
+                linewidth=6)
         freq.set_xticks(np.array(be[1:])-0.5)
-        freq.set_xticklabels(be[1:], fontsize=16 )
+        labels = []
+        for l in be[1::2]:
+            labels += [l]
+            labels += [""]
+        freq.set_xticklabels(labels, fontsize=40 )
         partialsum = 0.0
         totRoutes = 0
         for i in hh:
@@ -485,11 +488,14 @@ class dataParser():
             totRoutes = partialsum
         cum.set_xlim([0,25])
         cum.plot(bh[:len(cumulativeH)], 
-                np.array(cumulativeH)/partialsum, ls="steps--")
+                np.array(cumulativeH)/partialsum, color="green", 
+                ls="steps--", linewidth=3)
                 #label = "Cumulative hopCount")
         #cum.legend(loc="lower right")
-        freq.plot(bh[:len(hh)], np.array(hh)/totRoutes, label="length", drawstyle="steps")
-        freq.xaxis.grid(linestyle='--', linewidth=1, alpha=0.1)
+        freq.plot(bh[:len(hh)], np.array(hh)/totRoutes, 
+                label="length", color="green", drawstyle="steps", 
+                linewidth=3)
+        #freq.xaxis.grid(linestyle='--', linewidth=1, alpha=0.1)
         plt.savefig(routeFolder+"/routes."+C.imageExtension)
     
 
@@ -504,6 +510,7 @@ class dataParser():
         weightDistributions = []
     
         bins = np.array(range(0,250,1))/float(10)
+        odd = True
         for l in sorted(numHopMap):
             hw, bw = np.histogram(numHopMap[l], bins=bins)
             weightDistributions.append(hw)
@@ -513,12 +520,17 @@ class dataParser():
             else:
                 rFrac = "."+str(int(frac*10))
 
-            labels.append(str(l) + "\n" + str(rFrac) + "%")
+            if odd:
+                labels.append(str(l) + "\n" + str(rFrac) + "%")
+                odd = False
+            else:
+                labels.append(str(l) + "\n\n" + str(rFrac) + "%")
+                odd = True
             freqLabels.append(str(rFrac) + "%")
     
         ax1 = plt.subplot(111)
         #ax1.set_xticks(range(len(labels)), labels)
-        ax1.set_xticklabels(labels, fontsize = 14)
+        ax1.set_xticklabels(labels, fontsize = 40)
         ax1.boxplot(sortedEtx)
         ax1.set_ylim([0,40])
         #ax2 = ax1.twiny()
@@ -589,6 +601,7 @@ class dataParser():
                 else:
                     degreeDistribution[node].append(len(graph[node]))
 
+        retValue = dd2()
         degFloat = [int(round(np.average(degreeDistribution[v]),0)) for \
                 v in degreeDistribution]
         bins = range(1,int(max(degFloat))+1)
@@ -616,14 +629,16 @@ class dataParser():
         fitfunc = lambda p, x: p[0] * x ** (p[1])
         errfunc = lambda p, x, y: (y - fitfunc(p, x))
         #
-        rcParams.update({'font.size': 35})
         out,success = optimize.leastsq(errfunc, 
                 [1,-1],args=(x,y))
         fittedValue = []
         for v in x:
             fittedValue.append(out[0]*(v**out[1]))
         p = plt.subplot(1,1,1)
-        p.plot(x, y, "bo", x, fittedValue, markersize=15)
+        p.plot(x, y, "ko", x, fittedValue, "k-", markersize=15)
+        retValue["LINEAR"]["X"] = x
+        retValue["LINEAR"]["Y"] = y
+        retValue["LINEAR"]["FITTED"] = fittedValue
         #p.set_xscale("log")
         #p.set_yscale("log")
         #p.set_ylim(0,1)
@@ -633,7 +648,7 @@ class dataParser():
         plt.clf()
 
         p = plt.subplot(1,1,1)
-        p.plot(xNL, yNL, "bo", markersize=15)#, x, fittedValue)
+        p.plot(xNL, yNL, "ko", markersize=15)#, x, fittedValue)
         p.set_xscale("log")
         p.set_yscale("log")
         ##p.set_ylim(0,1)
@@ -641,8 +656,11 @@ class dataParser():
         plt.title("Degree relative frequency, non-leaf subgraph")
         plt.savefig(routeFolder+"/NLdegree."+C.imageExtension)
         plt.clf()
-        rcParams.update({'font.size': 20})
-    
+        retValue["NLINEAR"]["X"] = x
+        retValue["NLINEAR"]["Y"] = y
+        retValue["NLINEAR"]["FITTED"] = fittedValue
+        return retValue
+
     def getOwnerDistribution(self, net):
         ownerFolder = C.resultDir+net+"/OWNERS"
         try:
@@ -1027,18 +1045,22 @@ class dataParser():
 
             TCtraffic = 0
             for m in selectorSet:
-                TCtraffic += (IPUDPHEaderSize + OLSRMsgHeaderSize + TCMsgHeaderSize +\
+                TCtraffic += (IPUDPHEaderSize + OLSRMsgHeaderSize + \
+                        TCMsgHeaderSize +\
                         len(selectorSet[m])*SelectorFieldSize)
             signallingTraffic.append(TCtraffic*len(selectorSet))
             #signallingTraffic.append(TCtraffic)
-            tcMessages["MPR"].append(1.0*len(selectorSet)*(len(selectorSet)-1)/len(G.edges()))
-            tcMessages["WC"].append(1.0*len(G)*(len(G)-1)/len(G.edges()))
+            tcMessages["MPR"].append(
+                    1.0*len(selectorSet)*(len(selectorSet)-1)/
+                    len(G.edges()))
+            tcMessages["WC"].append(
+                    1.0*len(G)*(len(G)-1)/len(G.edges()))
 
 
             TCtraffic = 0
             for node in G.nodes():
-                TCtraffic += (IPUDPHEaderSize + OLSRMsgHeaderSize + TCMsgHeaderSize +\
-                        len(G[node])*SelectorFieldSize)
+                TCtraffic += (IPUDPHEaderSize + OLSRMsgHeaderSize +\
+                        TCMsgHeaderSize + len(G[node])*SelectorFieldSize)
             worstCaseTraffic.append(TCtraffic*len(G.nodes()))
 
             r = self.computeRobustness(purgedG, tests=30)[0]
@@ -1061,7 +1083,8 @@ class dataParser():
                 np.average(averageRobustness[key]) for key in \
                 retValue["ROBUSTNESS"]["x"]]
 
-        plt.plot(retValue["ROBUSTNESS"]["x"], retValue["ROBUSTNESS"]["y"])
+        plt.plot(retValue["ROBUSTNESS"]["x"], 
+                retValue["ROBUSTNESS"]["y"])
         plt.title("Average robustness: "+self.net)
         plt.xlabel("Number of failed links")
         plt.savefig(routeFolder+"/robustness-"+mprMode+"."+C.imageExtension)
@@ -1142,13 +1165,20 @@ class dataParser():
             if sbestW[counter] != smprW[counter]:
                 diffSamples += 1
             counter += 1
-        plt.plot(range(len(sbestW)), sbestW, label="optimal-weight")
-        plt.plot(range(len(smprW)), smprW, label="approx-weight")
+        plt.plot(range(len(sbestW)), smprW,
+                label="approx-weight", linewidth=2, color="yellow")
+        plt.plot(range(len(sbestW)), sbestW,
+                label="optimal-weight", linewidth=5, color="red", alpha=0.5)
+        #plt.axes().set_aspect(2)
+        #plt.plot(range(len(smprW)), smprW, label="approx-weight")
+        #plt.plot(range(len(sbestW)), sbestW, label="optimal-weight")
+        #plt.plot(range(len(smprW)), smprW, label="approx-weight")
         plt.xlabel("route")
         plt.ylabel("Route weight")
         plt.title("Comparison of route weight")
         plt.legend()
-        plt.savefig(routeFolder+"/weight-approx-"+net+"-"+mprMode+"."+C.imageExtension)
+        plt.savefig(routeFolder+"/weight-approx-"+net+"-"+mprMode+"."+\
+                C.imageExtension)
         plt.clf()
         self.weightStats = dd1()
 
@@ -1213,6 +1243,7 @@ def extractDataSeries(retValues):
 
     etx = dataPlot(C)
     link = dataPlot(C)
+    degree = dataPlot(C)
     mprLq = dataPlot(C)
     mprRFC = dataPlot(C)
     betweenness = dataPlot(C)
@@ -1230,6 +1261,7 @@ def extractDataSeries(retValues):
     ownerRobustness = dataPlot(C)
 
     for n,v in retValues.items():
+        routeFolder = C.resultDir+n+"/ROUTES/"
         if "etx" in v:	
             etx.y.append((v["etx"]["y"], n))
             etx.x.append(v["etx"]["x"])
@@ -1256,6 +1288,13 @@ def extractDataSeries(retValues):
             link.xAxisLabel = "link"
             link.yAxisLabel = "ETX"
             link.legendPosition = "center left"
+
+        if "degree" in v:
+            degree.x.append(v["degree"]["LINEAR"]["X"])
+            degree.x.append(v["degree"]["LINEAR"]["X"])
+            degree.y.append((v["degree"]["LINEAR"]["Y"], ""))
+            degree.y.append((v["degree"]["LINEAR"]["FITTED"],""))
+            degree.outFile = routeFolder + "degreeDistribution"
 
         if "MPRRFC" in v:
             mprRFC.x.append(v["MPRRFC"]["MPR"]["x"])
@@ -1284,11 +1323,11 @@ def extractDataSeries(retValues):
             mprRobustness.yAxisLabel = "Robustness"
             mprRobustness.legendPosition = "lower left"
 
-            if "MPRSIGRFC" in v["MPRRFC"] and "MPRSIGLQ" in v["MPRLQ"]:
-                MPRSigHistogram["RFC"].append(v["MPRSIGRFC"]["MPRTC"])
-                MPRSigHistogram["LQ"].append(v["MPRSIGLQ"]["MPRTC"])
-                MPRSigHistogram["WC"].append(v["MPRSIGLQ"]["WCTC"])
-                MPRSigHistogram["label"].append(n)
+            #if "MPRSIGRFC" in v["MPRRFC"] and "MPRSIGLQ" in v["MPRLQ"]:
+            MPRSigHistogram["RFC"].append(v["MPRRFC"]["MPRTC"])
+            MPRSigHistogram["LQ"].append(v["MPRLQ"]["MPRTC"])
+            MPRSigHistogram["WC"].append(v["MPRLQ"]["WCTC"])
+            MPRSigHistogram["label"].append(n)
 
 
         if "CENTRALITY" in v:
@@ -1376,16 +1415,19 @@ def extractDataSeries(retValues):
             ownerRobustness.yAxisLabel = "Robustness"
             ownerRobustness.outFile = comparisonFolder+"ownershipRob"
 
-    etx.plotData()
-    link.plotData()
-    mprLq.plotData()
-    mprRFC.plotData()
-    mprRobustness.plotData()
-    closeness.plotData()
-    betweenness.plotData()
+    etx.plotData(bw="PRINTABLE")
+    etx.saveData()
+    link.plotData(bw="PRINTABLE")
+    link.saveData()
+    degree.saveData()
+    mprLq.plotData(bw="PRINTABLE")
+    mprRFC.plotData(bw="PRINTABLE")
+    mprRobustness.plotData(bw="PRINTABLE")
+    closeness.plotData(bw="PRINTABLE")
+    betweenness.plotData(bw="PRINTABLE")
     betweennessD.plotData()
     closenessV.plotData()
-    robustness.plotData()
+    robustness.plotData(bw="PRINTABLE")
     singleNodeCloseness.plotData()
     singleNodeBetweenness.plotData()
     ownership.plotData()
@@ -1404,7 +1446,7 @@ def extractDataSeries(retValues):
         x = np.array(range(1,len(MPRSigHistogram["RFC"])+1))
         ax.bar(x, MPRSigHistogram["RFC"], width, color = "b", label="RFC")
         ax.bar(shift + x, MPRSigHistogram["LQ"], width, color = "r", label="lq")
-        ax.bar(2*shift + x, MPRSigHistogram["WC"], width, color = "g", 
+        ax.bar(2*shift + x, MPRSigHistogram["WC"], width, color = "y", 
                 label="LSR")
         ax.set_xticks(x+shift)
         lb = ax.set_xticklabels(MPRSigHistogram["label"])
@@ -1414,6 +1456,51 @@ def extractDataSeries(retValues):
         plt.savefig(comparisonFolder+"signallingHist."+C.imageExtension)
         plt.clf()
 
+    if robustness.title !=  "":
+        # robustness graphs need to be printed with custom options.
+        plt.clf()
+        colors = ["blue", "red", "#eec223"]
+        thickNess = [1,3,5]
+        for i in range(len(robustness.x)):
+            if "core" in robustness.y[i][1]:
+                plt.plot(robustness.x[i], robustness.y[i][0], 
+                        label=robustness.y[i][1], 
+                        linestyle="--", color=colors[i/2],
+                        linewidth=thickNess[i/2])
+            else:
+                plt.plot(robustness.x[i], robustness.y[i][0], 
+                        label=robustness.y[i][1], color=colors[i/2],
+                        linewidth=thickNess[i/2])
+
+        plt.legend(loc="lower left", fancybox=True, 
+                 shadow=True, numpoints=1)
+        plt.title(robustness.title)
+        plt.xlabel(robustness.xAxisLabel)
+        plt.ylabel(robustness.yAxisLabel)
+        plt.savefig("/tmp/rob.eps")
+
+    if mprRobustness.title !=  "":
+        # robustness graphs need to be printed with custom options.
+        plt.clf()
+        colors = ["blue", "red", "#eec223"]
+        thickNess = [1,3,5]
+        for i in range(len(mprRobustness.x)):
+            if "RFC" in mprRobustness.y[i][1]:
+                plt.plot(mprRobustness.x[i], mprRobustness.y[i][0], 
+                        label=mprRobustness.y[i][1], 
+                        linestyle="--", color=colors[i/2],
+                        linewidth=thickNess[i/2])
+            else:
+                plt.plot(mprRobustness.x[i], mprRobustness.y[i][0], 
+                        label=mprRobustness.y[i][1], color=colors[i/2],
+                        linewidth=thickNess[i/2])
+
+        plt.legend(loc="lower left", fancybox=True, 
+                 shadow=True, numpoints=1)
+        plt.title(robustness.title)
+        plt.xlabel(robustness.xAxisLabel)
+        plt.ylabel(robustness.yAxisLabel)
+        plt.savefig("/tmp/MPRrob.eps")
 
 
 
@@ -1428,7 +1515,7 @@ class configuration:
         self.printInfo = False
         self.maxGroupSize = 5
         self.createTestRun = False
-        self.imageExtension = "png"
+        self.imageExtension = "eps"
         self.nameCompression = ""
         self.namesDictionaryFileName = ""
     def checkCorrectness(self):
@@ -1520,7 +1607,7 @@ if  __name__ =='__main__':
         sys.exit(1)
 
 
-    rcParams.update({'font.size': 20})
+    rcParams.update({'font.size': 40})
     startTime =  datetime.now()
     print "loading", datetime.now()
     print C.loadDb
