@@ -1,4 +1,7 @@
 
+# @copyright Leonardo Maccari: leonardo.maccari@unitn.it
+# released under GPLv3 license
+
 import requests
 from requests.exceptions import RequestException
 from simplejson.decoder import JSONDecodeError

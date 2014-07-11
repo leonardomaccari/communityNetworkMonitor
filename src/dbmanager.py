@@ -1,3 +1,7 @@
+
+# @copyright Leonardo Maccari: leonardo.maccari@unitn.it
+# released under GPLv3 license
+
 from sqlalchemy.orm import relationship, sessionmaker, scoped_session
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, ForeignKey, Integer

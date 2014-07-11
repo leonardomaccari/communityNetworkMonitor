@@ -1,3 +1,7 @@
+
+# @copyright Leonardo Maccari: leonardo.maccari@unitn.it
+# released under GPLv3 license
+
 from mechanize import Browser
 from threading import Thread
 from ConfigParser import Error

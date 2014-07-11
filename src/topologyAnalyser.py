@@ -2,6 +2,9 @@
 
 #FIXME add copyright notice to every file
 
+# @copyright Leonardo Maccari: leonardo.maccari@unitn.it
+# released under GPLv3 license
+
 from ConfigParser import SafeConfigParser
 from glob import glob
 import sys

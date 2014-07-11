@@ -1,3 +1,7 @@
+
+# @copyright Leonardo Maccari: leonardo.maccari@unitn.it
+# released under GPLv3 license
+
 from plugin import plugin
 from threading import Thread
 from ConfigParser import Error
