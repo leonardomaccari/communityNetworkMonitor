@@ -219,7 +219,8 @@ if __name__ == '__main__':
     while True:
         a = sum([i.is_alive() for i in threadList])
         if a != 0:
-            logger.info("Waiting %s seconds for %d threads to gracefully exit", waitTime, a)
+            logger.info("Waiting %s seconds for %d threads to gracefully exit",\
+                    waitTime, a) 
         else:
             break
         if waitTime <= 0:

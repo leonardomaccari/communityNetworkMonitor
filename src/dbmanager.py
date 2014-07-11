@@ -10,6 +10,8 @@ from sqlalchemy import create_engine, and_, desc
 from sqlalchemy.exc import OperationalError
 from datetime import datetime
 from random import random
+from SimpleAES import SimpleAES
+from ConfigParser import NoSectionError
 import sys
 
 Base = declarative_base()
@@ -95,16 +97,37 @@ class etx(Base):
     etx_value = Column(Float)
     link_r = relationship(link)
 
-def addGraphToDB(graph, localSession, scanId):
+def encrypt(aes, s):
+    """ simple wrapper for encryption of a string with SimpleAES"""
+    #TODO this file should become a class, and aes should become a member
+    if aes != None:
+        try:
+            return aes.encrypt(str(s))
+        except Exception as e:
+            print "Error in encrypt: ", e
+            print s, str(s)
+            sys.exit(1)
+    return str(s)
+
+def addGraphToDB(graph, localSession, scanId, aes):
     """ transforms a nx graph in db entries """
 
     nodes = {}
     people = {}
+    unknownPerson = ("UNKNOWN", "UNKNOWN")
     for edge in graph.edges(data=True):
         sid = edge[0]
         did = edge[1]
-        sperson = (graph.node[edge[0]]["owner"],graph.node[edge[0]]["email"])
-        dperson = (graph.node[edge[1]]["owner"],graph.node[edge[1]]["email"])
+        if "owner" in graph.node[edge[0]]:
+            sperson = (encrypt(aes, graph.node[edge[0]]["owner"]),
+                    encrypt(aes, graph.node[edge[0]]["email"]))
+        else:
+            sperson = unknownPerson
+        if "owner" in graph.node[edge[1]]:
+            dperson = (encrypt(aes, graph.node[edge[1]]["owner"]),
+                    encrypt(aes, graph.node[edge[1]]["email"]))
+        else:
+            dperson = unknownPerson
         etxValue = edge[2]['weight']
         if sperson not in people:
             # it's an unscanned new person, is it in the database?
@@ -132,41 +155,43 @@ def addGraphToDB(graph, localSession, scanId):
 
         #TODO  I have get its Id 
         if sid not in nodes.keys():
+            encSid = encrypt(aes, sid)
             # it's an unscanned new node, is it in the database?
             presentNode = localSession.query(node).filter(\
-                    and_(node.Id==sid, node.scan_Id==scanId.Id)).first()
+                    and_(node.Id==encSid, node.scan_Id==scanId.Id)).first()
             if not presentNode:
                 # not in the db, create new node
                 sname = ""
                 if 'name' in graph.node[sid]:
-                    sname = graph.node[sid]['name']
-                tmps = node(Id=sid, scan_Id_r=scanId, name=sname,
+                    sname = encrypt(aes, graph.node[sid]['name'])
+                tmps = node(Id=encSid, scan_Id_r=scanId, name=sname,
                         owner_Id_r=newSPerson)
-                nodes[sid] = tmps 
+                nodes[encSid] = tmps 
             else:
-                nodes[sid] = presentNode
-                tmps = nodes[sid]
+                nodes[encSid] = presentNode
+                tmps = nodes[encSid]
         else:
             # yes we scanned it
-            tmps = nodes[sid]
+            tmps = nodes[encSid]
 
         if did not in nodes.keys():
+            encDid = encrypt(aes, did)
             presentNode = localSession.query(node).filter(\
-                    and_(node.Id==did, node.scan_Id==scanId.Id)).first()
+                    and_(node.Id==encDid, node.scan_Id==scanId.Id)).first()
             if not presentNode:
                 # not in the db, create new node
                 dname = ""
                 if 'name' in graph.node[did]:
-                    dname = graph.node[did]['name']
-                tmpd = node(Id=did, scan_Id_r=scanId, name=dname, 
+                    dname = encrypt(aes, graph.node[did]['name'])
+                tmpd = node(Id=encDid, scan_Id_r=scanId, name=dname, 
                         owner_Id_r=newDPerson)
-                nodes[did] = tmpd 
+                nodes[encDid] = tmpd 
             else:
-                nodes[did] = presentNode
-                tmpd = nodes[sid]
+                nodes[encDid] = presentNode
+                tmpd = nodes[encSid]
         else:
             # yes we scanned it
-            tmpd = nodes[did]
+            tmpd = nodes[encDid]
         lt = ""
         if "link_type" in edge[2]:
             lt=edge[2]['link_type']
@@ -188,6 +213,7 @@ def initializeDB(parser):
         print "mySQL credentials or non-existent sqlite folder."
         print "Please check your configuration"
         sys.exit(1)
+
     sessionFactory = sessionmaker(bind=engine, autocommit=True)
     localSession = scoped_session(sessionFactory)
     return localSession

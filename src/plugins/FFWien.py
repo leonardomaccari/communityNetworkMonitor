@@ -87,6 +87,7 @@ class FFWien(plugin):
                     wirelessInterfacesURL)
             wiredInterfacesDict = self.decodeJSON(wiredInterfaces,
                     wiredInterfacesURL)
+            print wirelessInterfacesDict
             wirelessIfNum = len(wirelessInterfacesDict['entries'])
             for ifu in wirelessInterfacesDict['entries'] + \
                 wiredInterfacesDict['entries']:
@@ -432,7 +433,7 @@ class FFWien(plugin):
             self.logger.debug("OLSR %d, %d, %d", numLinks, 
                     numDoubleLinks, numReverseLinks)
         #FIXME Need to add owners and emails here
-        addGraphToDB(G, self.localSession, newScan)
+        addGraphToDB(G, self.localSession, newScan, self.aes)
         olsrDump.close()
         self.logger.info("Ok, completed the topology download:"+\
                 "%d nodes, %d links, %d unknown", len(G.nodes()), 

@@ -5,12 +5,13 @@ import sys
 import time
 import simplejson
 from threading import Thread
-from ConfigParser import NoOptionError
+from ConfigParser import NoOptionError, NoOptionError
 
 class plugin(Thread):
     disabledMessage = "Plugin disabled, doing nothing"
     exitAll = False
     session = None
+    aes = None
 
     def __init__(self):
         print >> sys.stderr, "Error, you should not call ",\
@@ -96,6 +97,26 @@ class plugin(Thread):
                 self.logger.error("Could not open file specified"+\
                         "in pseudonymdump option:"+pseudonymDumpFileName)
                 sys.exit(1)
+
+        key = ""
+        #TODO this must be moved in a class for the database connection. 
+        #dbmanager should become a class and the key should be moved there
+        #or else, it is repeated for every plugin
+        try:
+            key = parser.get('encrypt', 'key')
+        except NoSectionError:
+            print "ERROR: you always have to specify a key for local encryption of "
+            print "the database. The skey is used to anonymise node names, owners, emails"
+            print "You have to add a encrypt.conf file in the conf/ folder with a [encrypt]"
+            print "section and a seed configuration, like:\n"
+            print "[encrypt]"
+            print "key = randomseedusedasinputforcrypto"
+            print "If you do not want to encrypt, use an empty [encrypt] stanza"
+            sys.exit(1)
+        except NoOptionError:
+            key = ""
+        if key != "":
+            self.aes = SimpleAES(key)
 
         return enabled, returnLevel, pluginName
 

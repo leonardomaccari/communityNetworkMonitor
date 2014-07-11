@@ -134,7 +134,7 @@ class FFGraz(plugin):
         newFile = topo_file(file_url=fileName, scan_Id_r=newScan, time=newDate)
         self.localSession.add(newFile)
         #FIXME NEed to add owners and emails here
-        addGraphToDB(simpleG, self.localSession, newScan)
+        addGraphToDB(simpleG, self.localSession, newScan, self.aes)
         f.close()
         os.remove(topoFile[0])
         #FIXME split this function in pieces and add some proper logging for

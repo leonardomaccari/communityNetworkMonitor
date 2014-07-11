@@ -17,6 +17,7 @@ You will need to install some python modules:
  - simplejson
  - python-mysqldb (for ninux plugin, or if you want to use any other DB
    that is not sqlite)
+ - simpleAES (for anonymization)
 
 
 run ./src/topologyAnalyser.py, if you have other errors for mising modules

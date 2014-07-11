@@ -97,6 +97,6 @@ class ninux(plugin):
             fromSet.add('"'+down+'"' + " " + "<"+demail+">")
         self.dumpPseudonym(list(fromSet))
 
-        addGraphToDB(g, self.localSession, newScan)
+        addGraphToDB(g, self.localSession, newScan, self.aes)
 
 
