@@ -1,4 +1,5 @@
 
+import base64
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 
@@ -9,7 +10,7 @@ class myCrypto:
         """ class initialize, if no key is passed self.disabled = True """
         self.disabled = True
         if key != "":
-            self.enabled = True
+            self.disabled = False
             h = SHA256.new(key)
             keyHash = []
             k = h.hexdigest()
@@ -31,14 +32,21 @@ class myCrypto:
 
     def encrypt(self, s):
         """ use AES to encrypt content, encode in base64 to store it as string """
-        if self.enabled:
-            return str(self.aes.encrypt(self.pad(s))).encode('base64')
+        if not self.disabled:
+            return base64.b64encode(self.aes.encrypt(self.pad(s)))
         else:
             return s
 
     def decrypt(self, s):
         """ decrypt and unpad the text """
-        if self.enabled:
-            return self.aes.decrypt(self.unpad(str(s.decode('base64'))))
+        if not self.disabled:
+            return self.unpad(self.aes.decrypt(base64.b64decode(s)))
         else:
             return s
+
+    def testFunction(self):
+        testString = "XXX"
+        if testString == self.decrypt(self.encrypt(testString)):
+            print "Ok"
+        else:
+            print "NOK"
