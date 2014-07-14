@@ -77,7 +77,10 @@ class FFWien(plugin):
         wiredInterfacesURL = self.baseJSONURL+\
                 "/api/FFM-Wired_Interface"
 
-        newScan = scan(scan_type="JSON", network=self.pluginName)
+        if self.myCrypto.disabled:
+            newScan = scan(scan_type="JSON", network=self.pluginName)
+        else:
+            newScan = scan(scan_type="JSON", network=self.pluginName, encrypted=True)
         self.localSession.add(newScan)
 
         try: # wrappers for get() and json() will raise exceptions on errors
@@ -433,7 +436,7 @@ class FFWien(plugin):
             self.logger.debug("OLSR %d, %d, %d", numLinks, 
                     numDoubleLinks, numReverseLinks)
         #FIXME Need to add owners and emails here
-        addGraphToDB(G, self.localSession, newScan, self.aes)
+        addGraphToDB(G, self.localSession, newScan, self.myCrypto)
         olsrDump.close()
         self.logger.info("Ok, completed the topology download:"+\
                 "%d nodes, %d links, %d unknown", len(G.nodes()), 

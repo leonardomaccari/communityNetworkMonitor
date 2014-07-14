@@ -6,6 +6,7 @@ import time
 import simplejson
 from threading import Thread
 from ConfigParser import NoOptionError, NoOptionError
+from myCrypto import myCrypto
 
 class plugin(Thread):
     disabledMessage = "Plugin disabled, doing nothing"
@@ -108,16 +109,16 @@ class plugin(Thread):
             print "ERROR: you always have to specify a key for local encryption of "
             print "the database. The skey is used to anonymise node names, owners, emails"
             print "You have to add a encrypt.conf file in the conf/ folder with a [encrypt]"
-            print "section and a seed configuration, like:\n"
+            print "section and a key configuration, like:\n"
             print "[encrypt]"
             print "key = randomseedusedasinputforcrypto"
-            print "If you do not want to encrypt, use an empty [encrypt] stanza"
+            print "If you do not want to encrypt, use an empty [encrypt] stanza, key"
+            print "is hashed and truncated to 32 bytes"
             sys.exit(1)
         except NoOptionError:
             key = ""
         if key != "":
-            self.aes = SimpleAES(key)
-
+            self.myCrypto = myCrypto(key)
         return enabled, returnLevel, pluginName
 
     def dumpPseudonym(self, d):

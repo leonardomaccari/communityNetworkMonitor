@@ -81,22 +81,27 @@ class ninux(plugin):
             self.logger.error("could not connect to ninux DB!")
             return 
 
-        newScan = scan(network=self.pluginName)
+        
+        if self.myCrypto.disabled:
+            newScan = scan(network=self.pluginName)
+        else:
+            newScan = scan(network=self.pluginName, encrypted=True)
+
         self.localSession.add(newScan)
         g = nx.Graph()
         fromSet = set()
         for [sid, sn, sown, semail, did, dn, down, demail, etxValue] in q:
-            # some strings in ninux DB are encoded not in weird
+            # some strings in ninux DB are encoded in weird
             # encodings, guess the encoding and convert
             sname = sn.decode(chardet.detect(sn)['encoding'])
             dname = dn.decode(chardet.detect(dn)['encoding'])
-            g.add_node(sid, name=sname, owner=sown, email=semail)
-            g.add_node(did, name=dname, owner=down, email=demail)
-            g.add_edge(sid,did,weight=etxValue)
+            g.add_node(str(sid), name=sname, owner=sown, email=semail)
+            g.add_node(str(did), name=dname, owner=down, email=demail)
+            g.add_edge(str(sid), str(did), weight=etxValue)
             fromSet.add('"'+sown+'"' + " " + "<"+semail+">")
             fromSet.add('"'+down+'"' + " " + "<"+demail+">")
         self.dumpPseudonym(list(fromSet))
 
-        addGraphToDB(g, self.localSession, newScan, self.aes)
+        addGraphToDB(g, self.localSession, newScan, self.myCrypto)
 
 

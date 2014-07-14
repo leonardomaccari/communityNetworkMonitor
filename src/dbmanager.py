@@ -9,9 +9,6 @@ from sqlalchemy import String, DateTime, Float, Boolean
 from sqlalchemy import create_engine, and_, desc
 from sqlalchemy.exc import OperationalError
 from datetime import datetime
-from random import random
-from SimpleAES import SimpleAES
-from ConfigParser import NoSectionError
 import sys
 
 Base = declarative_base()
@@ -23,6 +20,7 @@ class scan(Base):
     time = Column(DateTime, default=datetime.now)
     scan_type = Column(String(10), default="ETX")
     network = Column(String(10), default="NINUX")
+    encrypted = Column(Boolean(), default=False)
 
 class person(Base):
     __tablename__= 'person'
@@ -97,19 +95,7 @@ class etx(Base):
     etx_value = Column(Float)
     link_r = relationship(link)
 
-def encrypt(aes, s):
-    """ simple wrapper for encryption of a string with SimpleAES"""
-    #TODO this file should become a class, and aes should become a member
-    if aes != None:
-        try:
-            return aes.encrypt(str(s))
-        except Exception as e:
-            print "Error in encrypt: ", e
-            print s, str(s)
-            sys.exit(1)
-    return str(s)
-
-def addGraphToDB(graph, localSession, scanId, aes):
+def addGraphToDB(graph, localSession, scanId, myCrypto):
     """ transforms a nx graph in db entries """
 
     nodes = {}
@@ -119,13 +105,13 @@ def addGraphToDB(graph, localSession, scanId, aes):
         sid = edge[0]
         did = edge[1]
         if "owner" in graph.node[edge[0]]:
-            sperson = (encrypt(aes, graph.node[edge[0]]["owner"]),
-                    encrypt(aes, graph.node[edge[0]]["email"]))
+            sperson = (myCrypto.encrypt(graph.node[edge[0]]["owner"]),
+                    myCrypto.encrypt(graph.node[edge[0]]["email"]))
         else:
             sperson = unknownPerson
         if "owner" in graph.node[edge[1]]:
-            dperson = (encrypt(aes, graph.node[edge[1]]["owner"]),
-                    encrypt(aes, graph.node[edge[1]]["email"]))
+            dperson = (myCrypto.encrypt(graph.node[edge[1]]["owner"]),
+                    myCrypto.encrypt(graph.node[edge[1]]["email"]))
         else:
             dperson = unknownPerson
         etxValue = edge[2]['weight']
@@ -155,7 +141,7 @@ def addGraphToDB(graph, localSession, scanId, aes):
 
         #TODO  I have get its Id 
         if sid not in nodes.keys():
-            encSid = encrypt(aes, sid)
+            encSid = myCrypto.encrypt(sid)
             # it's an unscanned new node, is it in the database?
             presentNode = localSession.query(node).filter(\
                     and_(node.Id==encSid, node.scan_Id==scanId.Id)).first()
@@ -163,7 +149,7 @@ def addGraphToDB(graph, localSession, scanId, aes):
                 # not in the db, create new node
                 sname = ""
                 if 'name' in graph.node[sid]:
-                    sname = encrypt(aes, graph.node[sid]['name'])
+                    sname = myCrypto.encrypt(graph.node[sid]['name'])
                 tmps = node(Id=encSid, scan_Id_r=scanId, name=sname,
                         owner_Id_r=newSPerson)
                 nodes[encSid] = tmps 
@@ -175,14 +161,14 @@ def addGraphToDB(graph, localSession, scanId, aes):
             tmps = nodes[encSid]
 
         if did not in nodes.keys():
-            encDid = encrypt(aes, did)
+            encDid = myCrypto.encrypt(did)
             presentNode = localSession.query(node).filter(\
                     and_(node.Id==encDid, node.scan_Id==scanId.Id)).first()
             if not presentNode:
                 # not in the db, create new node
                 dname = ""
                 if 'name' in graph.node[did]:
-                    dname = encrypt(aes, graph.node[did]['name'])
+                    dname = myCrypto.encrypt(graph.node[did]['name'])
                 tmpd = node(Id=encDid, scan_Id_r=scanId, name=dname, 
                         owner_Id_r=newDPerson)
                 nodes[encDid] = tmpd 
