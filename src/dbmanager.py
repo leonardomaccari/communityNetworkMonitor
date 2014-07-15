@@ -6,7 +6,7 @@ from sqlalchemy.orm import relationship, sessionmaker, scoped_session
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, ForeignKey, Integer
 from sqlalchemy import String, DateTime, Float, Boolean
-from sqlalchemy import create_engine, and_, desc
+from sqlalchemy import create_engine, and_
 from sqlalchemy.exc import OperationalError
 from datetime import datetime
 import sys
@@ -139,7 +139,6 @@ def addGraphToDB(graph, localSession, scanId, myCrypto):
         else:
             newDPerson = people[dperson]
 
-        #TODO  I have get its Id 
         if sid not in nodes.keys():
             encSid = myCrypto.encrypt(sid)
             # it's an unscanned new node, is it in the database?
@@ -188,14 +187,13 @@ def addGraphToDB(graph, localSession, scanId, myCrypto):
     #FIXME should return something here
 
 def initializeDB(parser):
-    #FIXME should catch errors here, do not put a default 
-    # in the sqlite database? or add testdb to the git repo
+    """ Create or initialize the SQL db """ 
     try:
         database =  parser.get('main', 'localdb')
         engine = create_engine(database)
         Base.metadata.create_all(engine)
     except OperationalError:
-        print "ERROR: Could not open the local database. This may be to wrong"
+        print "ERROR: Could not open the local database. This may be due to wrong"
         print "mySQL credentials or non-existent sqlite folder."
         print "Please check your configuration"
         sys.exit(1)

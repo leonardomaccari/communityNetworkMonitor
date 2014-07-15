@@ -33,7 +33,7 @@ def getConfig():
 
 
 def parseArgs():
-    """ argument parser."""
+    """ argument parser """
     C = configuration()
     try:
         opts, args = getopt.getopt(sys.argv[1:], "dv:h")
@@ -94,11 +94,13 @@ class configuration():
             self.optionalParams[pvalue[0]] = pvalue[2]
 
     def checkCorrectnes(self):
-        # do some errorchecking here
+        """ do some consistence checks here for the configuration parameters """
         if self.getParam("help") == True:
             return False
         return True
+
     def printUsage(self):
+        """ print the usage of the program """
         print >> sys.stderr
         print >> sys.stderr, "usage:",
         print >> sys.stderr, "./topologyAnalyser.py:"
@@ -108,18 +110,19 @@ class configuration():
             print >> sys.stderr, " [",pname, pvalue[3], "]"
 
     def getParam(self, paramName):
+        """ return a configuration parameter """
         for pname, pvalue in self.neededParamsNames.items():
             if pvalue[0] == paramName:
                 return self.neededParams[paramName]
         for pname, pvalue in self.optionalParamsNames.items():
             if pvalue[0] == paramName:
                 return self.optionalParams[paramName]
-        #unset parameter
         print >> sys.stderr, "coding error: the",\
             paramName, "parameter does not exist"
         sys.exit(1)
 
     def printConf(self):
+        """ just print all the configuration for debug """
         print ""
         for pname, pvalue in self.neededParams.items():
             print pname, pvalue
@@ -128,16 +131,17 @@ class configuration():
 
 
 def termHandler(signum, frame):
+    """ try to leave time to the processess to exit, so they don't 
+    leave the db in an inconsistent state """
     for i in threadList:
         i.exitAll = True
 
 threadList = []
-    
+
 if __name__ == '__main__':
     pluginConfigFiles, mainConfigFile, parser = getConfig()
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    
 
     sHandler = logging.StreamHandler()
     sHandler.setLevel(logging.INFO)

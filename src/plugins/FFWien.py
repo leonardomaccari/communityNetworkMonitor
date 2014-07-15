@@ -57,7 +57,7 @@ class FFWien(plugin):
             self.period = self.convertTime(self.parser.get('FFWien', 'period'))
         except:
             self.period = 300
-  
+
     def checkJSONDump(self):
         """ check if there is a recent dump of the JSON database """
         lastScan = self.localSession.query(scan).order_by(scan.time).\
@@ -116,7 +116,7 @@ class FFWien(plugin):
                     self.logger.debug("Found an interface with no IP",
                             "address associated")
                     continue
-    
+
                 ip4NetworkLinksURL = self.baseJSONURL + ip4Links
                 ip4NetworkLinks = self.getURLWrapper(ip4NetworkLinksURL)
                 ipAddresses = []
@@ -233,7 +233,7 @@ class FFWien(plugin):
     def getLastEntries(self, url, lastDate):
         """ get all entries from an HTML table list if it is newer 
         than prevEntry. Format is from graz FF site """
-        
+
         mech = Browser()
         mech.set_handle_robots(False)
         try:
@@ -262,8 +262,8 @@ class FFWien(plugin):
                 break
 
         return returnLinks
-        
-    
+
+
     def getNewTopology(self):
         """ download the topology file from FFWien website """
 
@@ -353,7 +353,6 @@ class FFWien(plugin):
 
             # NOTE multi-edges are squashed on thebest one
 
-            #FIXME once debugging is over, do just one big if
             if etx != "INFINITE\n" and dstType == "LAN"\
                     and srcType == "LAN":
                         if self.debug == True:
@@ -363,12 +362,11 @@ class FFWien(plugin):
                             if src in G[dst]:
                                 reverseLinks["LL"] += 1
                             graph[src][dst][etx] = "L"
-    
+
                         if dst in G[src] and G[src][dst]['weight'] < etx:
                             continue
                         G.add_edge(src, dst, link_type=srcType,
                                 weight=etx)
-
             elif etx != "INFINITE\n" and dstType == "WLAN" and\
                     srcType == "WLAN":
                         if self.debug == True:
@@ -378,7 +376,7 @@ class FFWien(plugin):
                                 reverseLinks["WW"] += 1
                             numWireless += 1
                             graph[src][dst][etx] = "W"
-    
+
                         if dst in G[src] and G[src][dst]['weight'] < etx:
                             continue
                         G.add_edge(src, dst, link_type=dstType,
@@ -432,19 +430,20 @@ class FFWien(plugin):
                         numDoubleLinks += 1
                     if d in graph and s in graph[d]:
                         numReverseLinks += 1
-                    
+
             self.logger.debug("OLSR %d, %d, %d", numLinks, 
                     numDoubleLinks, numReverseLinks)
-        #FIXME Need to add owners and emails here
+        #FIXME Need to add owners and emails here 
         addGraphToDB(G, self.localSession, newScan, self.myCrypto)
         olsrDump.close()
         self.logger.info("Ok, completed the topology download:"+\
                 "%d nodes, %d links, %d unknown", len(G.nodes()), 
                 len(G.edges()),len(numUnknown))
         os.remove(f[0])
-    
+
     def getStats(self):
-        
+        """ main function called by run() in plugin class """
+
         for name,lg in logging.Logger.manager.loggerDict.items():
             if "urllib" in name:
                 lg.setLevel(logging.ERROR)
@@ -461,4 +460,4 @@ class FFWien(plugin):
             self.logger.info('Getting IP mapping from database')
             self.buildIPMapping(lastScan)
             self.getNewTopology()
-        
+

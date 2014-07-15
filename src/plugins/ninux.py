@@ -5,10 +5,8 @@
 from plugin import plugin
 from threading import Thread
 from ConfigParser import Error
-from sqlalchemy.exc import  SQLAlchemyError
 import logging
 import networkx as nx
-import time
 import chardet
 
 from dbmanager import *
@@ -40,9 +38,10 @@ class ninux(plugin):
             self.period = plugin.convertTime(self, self.parser.get('ninux', 'period'))
         except:
             self.period = 300
-    
+
     def getStats(self):
-    
+        """ called by the run() function of plugin class """
+
         if self.enabled == False:
             self.logger.info(plugin.disabledMessage)
             return
@@ -66,7 +65,7 @@ class ninux(plugin):
         = sifc.device_id and sifc.id = link.from_interface_id and
         difc.id = link.to_interface_id and difc.device_id = ddev.id and
         ddev.node_id = dnode.id"""
-    
+
         q = session.query("sid", "sname", "sowner", "semail", "did", 
                 "dname", "downer", "demail", "etx_v").\
             from_statement(etxQuery)
@@ -81,7 +80,7 @@ class ninux(plugin):
             self.logger.error("could not connect to ninux DB!")
             return 
 
-        
+
         if self.myCrypto.disabled:
             newScan = scan(network=self.pluginName)
         else:

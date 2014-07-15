@@ -9,6 +9,7 @@ from ConfigParser import NoOptionError, NoOptionError
 from myCrypto import myCrypto
 
 class plugin(Thread):
+    """ base class for the plugins. """
     disabledMessage = "Plugin disabled, doing nothing"
     exitAll = False
     session = None
@@ -18,7 +19,7 @@ class plugin(Thread):
         print >> sys.stderr, "Error, you should not call ",\
                 "init in the plugin class"
         sys.exit(1)
-    
+
     def baseInitialize(self, parser,  name, lc):
         """ initialize some shared parameters, do some error check """
 
@@ -26,6 +27,7 @@ class plugin(Thread):
         # thread with a localSession that is separated when they become
         # a thread. Here there is no thread so the scoped_session does
         # not differentiate between sessions. And havoc occurs.
+
         self.logger = logging.getLogger("plugin base")
         pluginName = os.path.splitext(os.path.basename(name))[0]
         if pluginName not in parser.sections():
@@ -61,15 +63,15 @@ class plugin(Thread):
 
         try:
             pseudonymFileName = parser.get(pluginName, 'pseudonymfile')
-        except NoOptionError: #FIXME all the try should match this!!
+        except NoOptionError: 
+            #FIXME all the try should match this!!
             # this code takes the input file, which is expected to be a 
             # json (possibly saved with simplejson.dump() where 
-            # a map of the kind {"FromStringX":"FromString"} is saved
-            # each FromStringX is mapped into the FromString. 
-            # You can generate the json with the option 'dumpnames' but
-            # you have to process it to merge multiple pseudonyms for the 
-            # same person. See README for how to do this
-            # FIXME write readme
+            # a map of the kind {"StringX":"String"} is saved.
+            # each StringX is mapped into the String. 
+            # This is needed if you wanto to add the owner's names/email to the
+            # database and you have a list of names/emails that merge in the
+            # same person/email.
             pseudonymFileName = ""
             pass
         if pseudonymFileName != "":
@@ -160,6 +162,7 @@ class plugin(Thread):
         raise
 
     def run(self):
+        """ main method called by the main process """
         self.addNetwork()
         while not self.exitAll:
             lastRun = datetime.now()

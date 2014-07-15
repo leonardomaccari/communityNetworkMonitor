@@ -17,21 +17,21 @@ You will need to install some python modules:
  - simplejson
  - python-mysqldb (for ninux plugin, or if you want to use any other DB
    that is not sqlite)
- - simpleAES (for anonymization)
+ - pycrypto (for anonymization)
 
 
-run ./src/topologyAnalyser.py, if you have other errors for mising modules
+run ./src/topologyAnalyser.py, if you have other errors for missing modules
 you may need to install more python packages.
 
 Once you satisfied the dependencies, look into the conf/main.conf file
-and choose your local database type. sqlite is the easisest option (see
+and choose your local database type. sqlite is the easiest option (see
 below for details).
 
-The few options are self-esplicative, run with -h for a list.  Once
-started, the program will run until you kill it and will save the
-information it fetches in the local database. For each scan you will
-have a new entry in the "scan" table, a new set of nodes links and of
-etx values in the respective tables. Then you can get the information
+The few command line parameters are self-explicative, run with -h for a
+list.  Once started, the program will run until you kill it and will
+save the information it fetches in the local database. For each scan you
+will have a new entry in the "scan" table, a new set of nodes, links and
+of etx values in the respective tables. Then you can get the information
 you need with SQL. For instance, if you want to have a table with
 "nodeId, nodeId, etx" for each link, for the FFWien network just for the
 last scan, you can use a query like:
@@ -65,13 +65,18 @@ list of files, commented:
     │   ├── __init__.py
     │   ├── ninux.py # ninux plugin
     │   └── plugin.py # base class for plugins
-    └── topologyAnalyser.py # main program file
+    ├── topologyAnalyser.py # main program file
+    └── myCrypto.py # a simple module for the encryption of data
 
-Each network is parsed looking for nodes, links and OLSR ETX values, each scan
-produces an update for the db described by the classes in dbmanager.py. 
-Depending on the network the scan may be performed using direct access to the
-node db, crawling the website for the available topology files or crawling the
-JSON interface. See each plugin documentation in the source code of the plugin.
+Each network is parsed looking for nodes, links and OLSR ETX values,
+each scan produces an update for the db described by the classes in
+dbmanager.py.  Depending on the network the scan may be performed using
+direct access to the node db, crawling the website for the available
+topology files or crawling the JSON interface. See each plugin
+documentation in the source code of the plugin.  Data can be anonymized.
+Since i have access to non public DB of nodes, owners and email, the
+daemon can be configured to encrypt with AES node names, owner names and
+emails. 
 
 The main config file main.conf contains
 
@@ -83,11 +88,25 @@ localdb can be changed to any sqlalchemy supported engine, (for instance
 postgresql://scott:tiger@localhost:5432/mydatabase) logfile is the file where
 the daemon logs its activity.
 
-each plugin will have its own configuration parameters. Ninux plugin
+any .conf file in the conf/ folder will be parsed. Encryption is set up
+with a stanza like the following
+
+[encrypt]
+key = yourencryptionkeyhere
+
+the key will be used to encrypt data with AES.  Note that if you have
+access to a db with encrypted entries, but you don't know the keys, you
+can still use it, all the encrypted entries are base64 encoded so you
+can query them in the db. You will not know the names of nodes, emails
+and people.
+
+Each plugin will have its own configuration parameters. Ninux plugin
 configuration is not included, since it needs to connect to a db with
-user and password. An example, with some parameters shared by all the
-plugin follows (note that the plugin name must be the same as the config
-entry): 
+user and password. Also people of FFWien, after a few weeks decided that
+the access to their json db has been limited to only authenticated
+people. FFWien can be accessed without credentials.
+An example, with some parameters shared by all the plugin follows (note
+that the plugin name must be the same as the config entry): 
 
 [FFGraz]
 enable = True    # enable/disable the plugin
@@ -164,7 +183,7 @@ valid (existent) place
 
 requests.packages.urllib3.connectionpool: INFO, Starting new HTTPS connection (1): ff-nodedb.funkfeuer.at
 
-the requests module is used in the FFWien plugin ans by default logs
+the requests module is used in the FFWien plugin and by default logs
 everything it does, you have to disable it. The only way I found is with
 the lines in getStats() that do:
 
