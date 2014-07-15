@@ -38,9 +38,9 @@ class topo_file(Base):
 
 class node(Base):
     __tablename__ = 'node'
-    Id = Column(String(50), primary_key=True)
+    Id = Column(String(150), primary_key=True)
     scan_Id = Column(Integer, ForeignKey('scan.Id'), primary_key=True)
-    name = Column(String(50))
+    name = Column(String(150))
     owner_Id = Column(Integer, ForeignKey(person.Id))
     manager_Id = Column(Integer, ForeignKey(person.Id))
     lat = Column(Float)
@@ -152,13 +152,13 @@ def addGraphToDB(graph, localSession, scanId, myCrypto):
                     sname = myCrypto.encrypt(graph.node[sid]['name'])
                 tmps = node(Id=encSid, scan_Id_r=scanId, name=sname,
                         owner_Id_r=newSPerson)
-                nodes[encSid] = tmps 
+                nodes[sid] = tmps 
             else:
-                nodes[encSid] = presentNode
-                tmps = nodes[encSid]
+                nodes[sid] = presentNode
+                tmps = nodes[sid]
         else:
             # yes we scanned it
-            tmps = nodes[encSid]
+            tmps = nodes[sid]
 
         if did not in nodes.keys():
             encDid = myCrypto.encrypt(did)
@@ -171,13 +171,13 @@ def addGraphToDB(graph, localSession, scanId, myCrypto):
                     dname = myCrypto.encrypt(graph.node[did]['name'])
                 tmpd = node(Id=encDid, scan_Id_r=scanId, name=dname, 
                         owner_Id_r=newDPerson)
-                nodes[encDid] = tmpd 
+                nodes[did] = tmpd 
             else:
-                nodes[encDid] = presentNode
-                tmpd = nodes[encSid]
+                nodes[did] = presentNode
+                tmpd = nodes[did]
         else:
             # yes we scanned it
-            tmpd = nodes[encDid]
+            tmpd = nodes[did]
         lt = ""
         if "link_type" in edge[2]:
             lt=edge[2]['link_type']
