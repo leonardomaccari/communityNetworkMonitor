@@ -27,6 +27,7 @@ import simplejson
 
 from dataPlot import dataPlot
 from routeComparison import * 
+from myCrypto import myCrypto
 
 try:
     from groupMetrics import computeGroupMetrics, groupMetricForOneGroup
@@ -87,10 +88,12 @@ class dataObject:
             if not namesFile.closed:
                 namesFile.close()
         f.close()
+
     def save(self, fileName):
         f = open(fileName, "w")
         pk.dump(self,f)
         f.close()
+
     def printSummary(self):
         logString = ""
         for net in self.scanTree:
@@ -131,8 +134,8 @@ def getDataSummary(ls, data):
            AND scan.Id= %d AND soid = sperson.Id AND doid = dperson.Id"""
 
     try:
-        q = ls.query("Id", "time", "scan_type", "network").from_statement(
-                scanQuery)
+        q = ls.query("Id", "time", "scan_type", "network", "encrypted")\
+                .from_statement(scanQuery)
         if len(q.all()) == 0:
             raise
     except:
@@ -142,8 +145,10 @@ def getDataSummary(ls, data):
     numScan = len(q.all())
     scanCounter = 0
     data.etxThreshold = C.etxThreshold
-    for [scanId, scanTime, scanType, scanNetwork] in q:
-        data.scanTree[scanNetwork][scanType].append([scanId, scanTime])
+    for [scanId, scanTime, scanType, scanNetwork, encrypted] in q:
+        data.scanTree[scanNetwork][scanType].append([scanId, scanTime, encrypted])
+        print encrypted, scanId
+
     
     for net in data.scanTree:
         counter = 0
@@ -158,16 +163,39 @@ def getDataSummary(ls, data):
                 break
             queryString = QUERY % scanId[0]
             q = ls.query("sid", "soid", "sname", "semail", "did",
-                    "doid", "dname", "demail","etxv").\
+                    "doid", "dname", "demail", "etxv").\
                     from_statement(queryString)
             dirtyG = nx.Graph()
+            noValue = "UNKNOWN"
             for values in q:
-                dirtyG.add_node(values[0], owner_Id = values[1], username=values[2],
-                        email=values[3])
-                dirtyG.add_node(values[4], owner_Id = values[5], username=values[6],
-                        email=values[7])
+                sid = C.myCrypto.decrypt(values[0])
+                did = C.myCrypto.decrypt(values[4])
+                if values[2] != noValue:
+                    sname = C.myCrypto.decrypt(values[2])
+                else:
+                    sname = noValue
+                if values[3] != noValue:
+                    semail = C.myCrypto.decrypt(values[3])
+                else:
+                    semail = noValue
+
+                if values[6] != noValue:
+                    dname = C.myCrypto.decrypt(values[6])
+                else:
+                    dname = noValue
+
+                if values[7] != noValue:
+                    demail = C.myCrypto.decrypt(values[7])
+                else:
+                    demail = noValue
+
+                dirtyG.add_node(sid, owner_Id = values[1], username=sname,
+                        email=semail)
+                dirtyG.add_node(did, owner_Id = values[5], username=dname,
+                        email=demail)
                 if values[8] < C.etxThreshold:
-                    dirtyG.add_edge(values[0],values[4], weight=float(values[8]))
+                    dirtyG.add_edge(sid, did, weight=float(values[8]))
+            code.interact(local=locals())
 
             if C.createTestRun == True:
                 nd = dirtyG.degree()
@@ -1518,6 +1546,8 @@ class configuration:
         self.imageExtension = "eps"
         self.nameCompression = ""
         self.namesDictionaryFileName = ""
+        self.decryptKey = ""
+        self.myCrypto = None
     def checkCorrectness(self):
         if self.loadFile != "" and self.loadDb != "":
             print "Error: You can not specify both file and db to load" 
@@ -1571,7 +1601,7 @@ data = dataObject()
 if  __name__ =='__main__':
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "d:f:r:s:pS:vn:")
+        opts, args = getopt.getopt(sys.argv[1:], "d:f:r:s:pS:vn:k:")
     except getopt.GetoptError, err:
         # print help information and exit:
         print >> sys.stderr,  str(err)
@@ -1600,6 +1630,9 @@ if  __name__ =='__main__':
         if option == "-v":
             C.imageExtension = "eps"
             continue
+        if option == "-k":
+            C.decryptKey = v
+            continue
         if option == "-n":
             C.namesDictionaryFileName = v
             continue
@@ -1615,7 +1648,9 @@ if  __name__ =='__main__':
         engine = create_engine(C.loadDb)
         sessionFactory = sessionmaker(bind=engine, autocommit=True)
         localSession = scoped_session(sessionFactory)
+        C.myCrypto = myCrypto(C.decryptKey)
         getDataSummary(localSession, data)
+
     if C.loadFile != "":
         try:
             data.initialize(C.loadFile)
@@ -1626,6 +1661,7 @@ if  __name__ =='__main__':
             print data.printSummary()
             sys.exit()
 
+    code.interact(local=locals())
 
     loadTime =  datetime.now() - startTime
     if C.saveDump != "":
