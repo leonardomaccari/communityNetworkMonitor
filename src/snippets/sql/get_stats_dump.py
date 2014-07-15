@@ -25,6 +25,7 @@ from scipy import stats
 from copy import copy
 import simplejson
 
+sys.path.append("../../")
 sys.path.append("dataPlot/")
 sys.path.append("community_network_analysis/")
 from routeComparison import * 
@@ -35,9 +36,20 @@ try:
     from mpr import solveMPRProblem, purgeNonMPRLinks
     from dataplot import dataPlot
 except ImportError:
-    print >> sys.stderr, "ERROR: You must link into this folder mpr.py, groupMetrics.py and ",\
-    "miscLibs.py from the community network analyser tool"
+    print >> sys.stderr, """ERROR: You are missing needed submodules
+    please run :
+        git submdule init
+        git submodule update
+        """
     sys.exit()
+
+# WARNING: this is a collection of functions i used to 
+# produce the results for the Elsevier Ad-Hoc networks journal
+# it is not well documented, not particularly easy to understand, 
+# but it can give inputs to extract data from the community network
+# database. Take a look at the dataParser() function, that is the one that calls
+# the functions that do the real data analysis.
+
 
 # these module-level functions are needed or else I can 
 # not pickle the data structure
@@ -54,6 +66,7 @@ def dd5():
 
 
 class dataObject:
+    """ This class is used to store and load pickle files """
     def __init__(self):
         self.scanTree = dd2()
         self.rawData = dd2()
@@ -119,11 +132,11 @@ class dataObject:
         logString += "\n\nETX threshold:" + str(self.etxThreshold)
 
         return logString
-             
-            
-         
 
 def getDataSummary(ls, data):
+    """ this is the function i use to extract the data from the database and 
+    populate the pickle files """
+
     scanQuery = "SELECT * from scan"
     QUERY="""select snode.Id AS sid, snode.owner_Id AS soid, sperson.username AS
            sname, sperson.email AS semail, dnode.Id AS did, dnode.owner_Id as doid,
@@ -251,17 +264,14 @@ def getDataSummary(ls, data):
             scanCounter += 1
             if int((100000 * 1.0*scanCounter / numScan)) % 10000 == 0:
                 print int((100 * 1.0*scanCounter / numScan)),"% complete"
-        #avg = defaultDict(list)
-        #avg[("leaves", 3)].append(nl)
-        #avg[("numNodes", 9)].append(nn)
-        #avg[("numEdges", 9)].append(le)
-        #avg[("largestComponent", 16)].append(componentSize)
-        #avg[("etxAvg", 16)].append(avgEtx)
-        #for label in avg:
-        #    data.dataAvg[net][label] = np.average(avg[label]) 
-
 
 class dataParser():
+    """ each network has its own dataparser, each dataparser instance runs in a
+    separate process to speed up computation """
+
+    # FIXME using processes requires a lot of memory if you want to run them in
+    # parallel
+
     net = "" 
     q = None
 
@@ -298,7 +308,10 @@ class dataParser():
         for scanId in self.rawData:
             netEtx += self.rawData[scanId]
         self.getRouteDistributions(self.net)
-        #retValue["degree"] = self.getDegreeDistribution(self.net)
+
+        #### here you can enable the single functions you want to run
+
+        retValue["degree"] = self.getDegreeDistribution(self.net)
         #retValue["OWNERDISTRIBUTION"] = self.getOwnerDistribution(self.net)
         #retValue["OWNERCENTRALITY"] = self.getOwnerCentrality(self.net)
         #self.routeComparison()
@@ -306,12 +319,13 @@ class dataParser():
         #retValue["etx"] = self.getETXDistribution(netEtx, bins)
         #retValue["link"] = self.getLinkDistributions(self.net)
         #retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
-        retValue["MPRRFC"] = self.getMPRSets(self.net, "RFC")
-        retValue["MPRLQ"] = self.getMPRSets(self.net, "lq")
-        retValue["ROBUSTNESS"] = self.getRobustness()
+        #retValue["MPRRFC"] = self.getMPRSets(self.net, "RFC")
+        #retValue["MPRLQ"] = self.getMPRSets(self.net, "lq")
+        #retValue["ROBUSTNESS"] = self.getRobustness()
         q.put(retValue)
    
     def getRobustness(self):
+        """ compute network robustness """
         coreRobustness = []
         averageRobustness = defaultdict(list) 
         averageCoreRobustness = defaultdict(list) 
@@ -339,6 +353,7 @@ class dataParser():
 
 
     def getETXDistribution(self, etxList, b):
+        """ compute the distribution of the ETX (link weights) """
         cleanList = [e for e in etxList if e < 10]
         h,b = np.histogram(cleanList, bins=b) 
         totalSamples = sum(h)*1.0
@@ -381,6 +396,7 @@ class dataParser():
     
     
     def getLinkDistributions(self, net):
+        """ get temporal average of the link weights """
         linkFolder = C.resultDir+net+"/LINKS/"
         try:
             os.mkdir(linkFolder)
@@ -425,6 +441,7 @@ class dataParser():
         return linkRanking
     
     def getRouteDistributions(self, net):
+        """ compute the average lenght and weight for the shortest routes """
         routeFolder = C.resultDir+net+"/ROUTES"
         try:
             os.mkdir(routeFolder)
@@ -618,6 +635,7 @@ class dataParser():
         #plt.clf()
     
     def getDegreeDistribution(self, net):
+        """ compute the distribution of the degree of nodes """
         routeFolder = C.resultDir+net+"/ROUTES"
         degreeDistribution = defaultdict(list)
         degreeDistributionNL = defaultdict(list)
@@ -691,6 +709,10 @@ class dataParser():
         return retValue
 
     def getOwnerDistribution(self, net):
+        """ this is very experimental stuff. for some networks, i can access the
+        name of the owner, so i can estimate the distribution of the owners,
+        centrality and robustness """
+        # FIXME remove this from the master branch
         ownerFolder = C.resultDir+net+"/OWNERS"
         try:
             os.mkdir(ownerFolder)
@@ -718,6 +740,9 @@ class dataParser():
         return retValue
 
     def getOwnerCentrality(self, net):
+        """ estimate the centrality of nodes belonging to the same owner """
+
+        # FIXME remove this from the master branch
         ownerFolder = C.resultDir+net+"/OWNERS"
         try:
             os.mkdir(ownerFolder)
@@ -761,6 +786,7 @@ class dataParser():
 
 
     def diffVectors(self, v1,v2):
+        """ compare two arrays """
         if len(v1) != len(v2):
             print >> sys.stderr, "Error, comparing two different arrays", v1, v2
             #sys.exit(1)
@@ -773,6 +799,9 @@ class dataParser():
     
     
     def getCentralityMetrics(self, net):
+        """ estimate centrality, this relies on community_network_analysis
+        module """
+        # FIXME cleanup this function
         bet = defaultdict(list) 
         betApproxCloseness = defaultdict(list) 
         betApproxDegree = defaultdict(list) 
@@ -1028,6 +1057,8 @@ class dataParser():
 
 
     def getMPRSets(self, net, mprMode):
+        """ estimate MPR sets, and other parameters related to that """
+
         routeFolder = C.resultDir+net+"/ROUTES/"
         counter = 70000 # testing only, limit the number of graphs under analysis
         mpr = []
@@ -1218,7 +1249,8 @@ class dataParser():
         return retValue
 
     def computeRobustness(self, graph, tests=100, mode="simple"):
-
+        """ compute network robustness using a percolation approach """
+        # FIXME move this to community_network_analysis module
         links = []
         weights = []
         for l in graph.edges(data=True):
@@ -1269,6 +1301,8 @@ class dataParser():
         return mainCSizeAvg, mainNonCSize
         
 def extractDataSeries(retValues):
+    """ This function is called once the single processes have exited. It
+    collects the data from each process and produces comparison results """
 
     etx = dataPlot(C)
     link = dataPlot(C)
@@ -1465,8 +1499,11 @@ def extractDataSeries(retValues):
     ownerCentrality.saveData()
     ownerRobustness.plotData()
     ownerRobustness.saveData()
- 
-    
+
+
+    # some of the graph must be plotted with special configurations so that they
+    # are readable 
+
     if len(MPRSigHistogram) != 0:
         ax = plt.subplot(111)
         #ax = fig.subplot(111)
@@ -1534,6 +1571,7 @@ def extractDataSeries(retValues):
 
 
 class configuration:
+    """ A configuration class to store command line and other parameters """
     def __init__(self):
         self.loadFile = ""
         self.loadDb = ""
@@ -1578,6 +1616,7 @@ class configuration:
         print "-n name compression JSON file"
 
 def createFolder(folder):
+    """ check if the folder exists and create it """
     f = C.resultDir+"/"+folder
     try:
         os.makedirs(f)

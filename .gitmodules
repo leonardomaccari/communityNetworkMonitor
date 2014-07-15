@@ -1,3 +1,6 @@
 [submodule "src/snippets/sql/dataPlot"]
 	path = src/snippets/sql/dataPlot
 	url = git@github.com:leonardomaccari/dataPlot.git
+[submodule "src/snippets/sql/community_networks_analysis"]
+	path = src/snippets/sql/community_networks_analysis
+	url = git@github.com:leonardomaccari/community_networks_analysis.git
