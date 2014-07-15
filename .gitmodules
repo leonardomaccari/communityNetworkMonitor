@@ -1,0 +1,3 @@
+[submodule "src/snippets/sql/dataPlot"]
+	path = src/snippets/sql/dataPlot
+	url = git@github.com:leonardomaccari/dataPlot.git
