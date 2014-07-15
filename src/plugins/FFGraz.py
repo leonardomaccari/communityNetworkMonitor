@@ -7,6 +7,7 @@ from threading import Thread
 from ConfigParser import Error
 import time
 from BeautifulSoup import BeautifulSoup
+from sqlalchemy import desc
 import gzip
 import pygraphviz as pg
 import networkx as nx
