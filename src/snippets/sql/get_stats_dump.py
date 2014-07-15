@@ -26,13 +26,14 @@ from copy import copy
 import simplejson
 
 sys.path.append("dataPlot/")
-from dataplot import dataPlot
+sys.path.append("community_network_analysis/")
 from routeComparison import * 
 from myCrypto import myCrypto
 
 try:
     from groupMetrics import computeGroupMetrics, groupMetricForOneGroup
     from mpr import solveMPRProblem, purgeNonMPRLinks
+    from dataplot import dataPlot
 except ImportError:
     print >> sys.stderr, "ERROR: You must link into this folder mpr.py, groupMetrics.py and ",\
     "miscLibs.py from the community network analyser tool"
