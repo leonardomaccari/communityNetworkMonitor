@@ -25,7 +25,8 @@ from scipy import stats
 from copy import copy
 import simplejson
 
-from dataPlot import dataPlot
+sys.path.append("dataPlot/")
+from dataplot import dataPlot
 from routeComparison import * 
 from myCrypto import myCrypto
 
@@ -195,7 +196,6 @@ def getDataSummary(ls, data):
                         email=demail)
                 if values[8] < C.etxThreshold:
                     dirtyG.add_edge(sid, did, weight=float(values[8]))
-            code.interact(local=locals())
 
             if C.createTestRun == True:
                 nd = dirtyG.degree()
@@ -1661,7 +1661,6 @@ if  __name__ =='__main__':
             print data.printSummary()
             sys.exit()
 
-    code.interact(local=locals())
 
     loadTime =  datetime.now() - startTime
     if C.saveDump != "":
