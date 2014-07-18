@@ -27,16 +27,19 @@ import simplejson
 
 sys.path.append("../../")
 sys.path.append("dataPlot/")
-sys.path.append("community_network_analysis/")
-from routeComparison import * 
+sys.path.append("community_networks_analysis/")
+
 from myCrypto import myCrypto
 
 try:
-    from groupMetrics import computeGroupMetrics, groupMetricForOneGroup
-    from mpr import solveMPRProblem, purgeNonMPRLinks
     from dataplot import dataPlot
-except ImportError:
-    print >> sys.stderr, """ERROR: You are missing needed submodules
+    from groupmetrics import computeGroupMetrics, groupMetricForOneGroup
+    from mpr import solveMPRProblem, purgeNonMPRLinks
+    from robustness import computeRobustness
+    from routecomparison import * 
+except ImportError, m:
+    print >> sys.stderr, """ERROR: You are missing needed submodules:
+    """, m, """
     please run :
         git submdule init
         git submodule update
@@ -132,6 +135,23 @@ class dataObject:
         logString += "\n\nETX threshold:" + str(self.etxThreshold)
 
         return logString
+
+def dumpGraphs(data, graphNumber):
+    """ this function dumps in the /tmp/ folder a number of graphs in matrix 
+    format """
+
+    for net in data.routeData:
+        scanIdList = data.routeData[net].keys()
+        for i in range(graphNumber):
+                if i < len(scanIdList):
+                    g = data.routeData[net][scanIdList[i]]["Graph"]
+                    relabels = {}
+                    for node in g.nodes():
+                        relabels[node] = g.nodes().index(node)
+                    nx.relabel_nodes(g, relabels, copy=False)
+                    nx.write_edgelist(g,"/tmp/"+net+str(i)+".edges", 
+                            data=["weight"])
+
 
 def getDataSummary(ls, data):
     """ this is the function i use to extract the data from the database and 
@@ -275,7 +295,6 @@ class dataParser():
     net = "" 
     q = None
 
-
     def __init__(self, netName, queue):
         self.net = netName
         self.q = queue
@@ -311,7 +330,7 @@ class dataParser():
 
         #### here you can enable the single functions you want to run
 
-        retValue["degree"] = self.getDegreeDistribution(self.net)
+        #retValue["degree"] = self.getDegreeDistribution(self.net)
         #retValue["OWNERDISTRIBUTION"] = self.getOwnerDistribution(self.net)
         #retValue["OWNERCENTRALITY"] = self.getOwnerCentrality(self.net)
         #self.routeComparison()
@@ -319,9 +338,9 @@ class dataParser():
         #retValue["etx"] = self.getETXDistribution(netEtx, bins)
         #retValue["link"] = self.getLinkDistributions(self.net)
         #retValue["CENTRALITY"] = self.getCentralityMetrics(self.net)
-        #retValue["MPRRFC"] = self.getMPRSets(self.net, "RFC")
-        #retValue["MPRLQ"] = self.getMPRSets(self.net, "lq")
-        #retValue["ROBUSTNESS"] = self.getRobustness()
+        retValue["MPRRFC"] = self.getMPRSets(self.net, "RFC")
+        retValue["MPRLQ"] = self.getMPRSets(self.net, "lq")
+        retValue["ROBUSTNESS"] = self.getRobustness()
         q.put(retValue)
    
     def getRobustness(self):
@@ -331,12 +350,12 @@ class dataParser():
         averageCoreRobustness = defaultdict(list) 
         for scanId in self.routeData:
             G = self.routeData[scanId]["Graph"]
-            r = self.computeRobustness(G, tests=30)[0]
+            r = computeRobustness(G, tests=30)[0]
             for k,v in r.items():
                 percent = int(100*float(k)/len(G.edges()))
                 averageRobustness[percent].append(v)
                 #x.append(float(k)/len(G.edges()))
-            r = self.computeRobustness(G, tests=30, mode="core")[0]
+            r = computeRobustness(G, tests=30, mode="core")[0]
             for k,v in r.items():
                 percent = int(100*float(k)/len(G.edges()))
                 averageCoreRobustness[percent].append(v)
@@ -447,7 +466,6 @@ class dataParser():
             os.mkdir(routeFolder)
         except:
             pass
-        b = np.array(range(1,201))/10.0
         numHops = []
         etxList = []
         etxTime = dd2()
@@ -1123,7 +1141,7 @@ class dataParser():
                         TCMsgHeaderSize + len(G[node])*SelectorFieldSize)
             worstCaseTraffic.append(TCtraffic*len(G.nodes()))
 
-            r = self.computeRobustness(purgedG, tests=30)[0]
+            r = computeRobustness(purgedG, tests=30)[0]
             for k,v in r.items():
                 percent = int(100*float(k)/len(globalMPRSet))
                 averageRobustness[percent].append(v)
@@ -1248,58 +1266,6 @@ class dataParser():
         retValue["WCTC"] = np.average(tcMessages["WC"])
         return retValue
 
-    def computeRobustness(self, graph, tests=100, mode="simple"):
-        """ compute network robustness using a percolation approach """
-        # FIXME move this to community_network_analysis module
-        links = []
-        weights = []
-        for l in graph.edges(data=True):
-            if mode == "core":
-                if len(graph[l[0]]) != 0 and \
-                        len(graph[l[1]]) != 0:
-                    links.append((l[0], l[1])) 
-            else:
-                links.append((l[0], l[1])) 
-            weights.append(float(l[2]["weight"]))
-
-        totWeight = sum(weights)
-        normalizedWeight = [l/totWeight for l in weights]
-        #normalizedWeight = [1.0/len(links) for l in links]
-        custDist = stats.rv_discrete(values=(range(len(links)),
-            normalizedWeight), name="custDist")
-
-        mainCSize = defaultdict(list)
-        mainNonCSize = defaultdict(list)
-        nlen = float(len(graph.nodes()))
-        elen = float(len(graph.edges()))
-        for i in range(tests):
-            purgedGraph = graph.copy()
-            purgedLinks = []
-            for k in range(1,int(elen/2)):
-                r = custDist.rvs()
-                if len(purgedLinks) >= elen:
-                    print >> sys.stderr, "Trying to purge",k,"links",\
-                        "from a graph with",elen," total links" 
-                    break
-                while (r in purgedLinks):
-                    r = custDist.rvs()
-                purgedLinks.append(r) 
-                l = links[r]
-                purgedGraph.remove_edge(l[0],l[1])
-                compList =  nx.connected_components(purgedGraph)
-                mainCSize[k].append(len(compList[0])/nlen)
-		
-                compSizes = [len(r) for r in compList[1:]]
-                if len(compSizes) == 0:
-                    mainNonCSize[k].append(0)
-                else:
-                    mainNonCSize[k].append(
-                        np.average([len(r) for r in compList[1:]])/nlen)
-        mainCSizeAvg = {}
-        for k, tests in mainCSize.items():
-            mainCSizeAvg[k] = np.average(tests)
-        return mainCSizeAvg, mainNonCSize
-        
 def extractDataSeries(retValues):
     """ This function is called once the single processes have exited. It
     collects the data from each process and produces comparison results """
