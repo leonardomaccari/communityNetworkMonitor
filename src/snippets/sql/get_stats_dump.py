@@ -331,8 +331,6 @@ class dataParser():
         #### here you can enable the single functions you want to run
 
         #retValue["degree"] = self.getDegreeDistribution(self.net)
-        #retValue["OWNERDISTRIBUTION"] = self.getOwnerDistribution(self.net)
-        #retValue["OWNERCENTRALITY"] = self.getOwnerCentrality(self.net)
         #self.routeComparison()
         #bins = np.array(range(1,1000))/100.0
         #retValue["etx"] = self.getETXDistribution(netEtx, bins)
@@ -725,83 +723,6 @@ class dataParser():
         retValue["NLINEAR"]["Y"] = y
         retValue["NLINEAR"]["FITTED"] = fittedValue
         return retValue
-
-    def getOwnerDistribution(self, net):
-        """ this is very experimental stuff. for some networks, i can access the
-        name of the owner, so i can estimate the distribution of the owners,
-        centrality and robustness """
-        # FIXME remove this from the master branch
-        ownerFolder = C.resultDir+net+"/OWNERS"
-        try:
-            os.mkdir(ownerFolder)
-        except:
-            pass
-        ownershipDistribution = defaultdict(list)
-        retValue = defaultdict(list)
-        #FIXME average this on all the scans? so far I get the latest one
-        for scanId in [self.routeData.keys()[-1]]:
-            graph = self.routeData[scanId]["Graph"]
-            for node,fields in graph.nodes(data=True):
-                nodeOwnerString = '"'+fields["username"]+'"' + " " +\
-                        "<"+fields["email"]+">"
-                realOwner = nodeOwnerString
-                try:
-                    realOwner = self.namesDictionary[nodeOwnerString]
-                except KeyError:
-                    pass
-                ownershipDistribution[realOwner].append(node)
-            s = sorted(ownershipDistribution.items(), key=lambda x: -len(x[1]))
-            for i in s:
-                print i[0], len(i[1])
-                retValue['x'].append(i[0].split()[0])
-                retValue['y'].append(len(i[1]))
-        return retValue
-
-    def getOwnerCentrality(self, net):
-        """ estimate the centrality of nodes belonging to the same owner """
-
-        # FIXME remove this from the master branch
-        ownerFolder = C.resultDir+net+"/OWNERS"
-        try:
-            os.mkdir(ownerFolder)
-        except:
-            pass
-        retValue = dd2()
-        #FIXME average this on all the scans? so far I get the latest one
-        for scanId in [self.routeData.keys()[-1]]:
-            graph = self.routeData[scanId]["Graph"]
-            nodeMerger = defaultdict(list)
-            ownerCentrality = {}
-            solBet, bestBet, solCl, bestCl, currCache = computeGroupMetrics(graph,
-                1, weighted=True, mode="greedy")
-            for node,fields in graph.nodes(data=True):
-                nodeOwnerString = '"'+fields["username"]+'"' + " " +\
-                        "<"+fields["email"]+">"
-                realOwner = nodeOwnerString
-                try:
-                    realOwner = self.namesDictionary[nodeOwnerString]
-                except KeyError:
-                    pass
-                nodeMerger[realOwner].append(node)
-            for o,n in nodeMerger.items():
-                b,c = groupMetricForOneGroup(graph, n, currCache)
-                ownerCentrality[o] = b
-
-            s = sorted(ownerCentrality.items(), key=lambda x: -x[1])
-            for i in s:
-                retValue["CENTRALITY"]['x'].append(i[0].split()[0])
-                retValue["CENTRALITY"]['y'].append(i[1])
-            for i in s:
-                newG = graph.copy()
-                for n in nodeMerger[i[0]]:
-                    newG.remove_node(n)
-                print float(len(nx.connected_components(newG)[0]))
-                retValue["ROBUSTNESS"]["x"].append(i[0].split()[0])
-                retValue["ROBUSTNESS"]["y"].append(
-                    float(len(nx.connected_components(newG)[0]))/len(graph))
-        return retValue
-
-
 
     def diffVectors(self, v1,v2):
         """ compare two arrays """
@@ -1285,9 +1206,6 @@ def extractDataSeries(retValues):
     singleNodeCloseness = dataPlot(C)
     singleNodeBetweenness = dataPlot(C)
     MPRSigHistogram = defaultdict(list)
-    ownership = dataPlot(C)
-    ownerCentrality = dataPlot(C)
-    ownerRobustness = dataPlot(C)
 
     for n,v in retValues.items():
         routeFolder = C.resultDir+n+"/ROUTES/"
@@ -1417,33 +1335,6 @@ def extractDataSeries(retValues):
             robustness.legendPosition = "lower left"
             robustness.outFile = comparisonFolder+"graphrobustness"
 
-        if "OWNERDISTRIBUTION" in v:
-            ownership.y.append((v["OWNERDISTRIBUTION"]["y"], "OwnerDistribution"))
-            ownership.x.append(range(len(v["OWNERDISTRIBUTION"]["x"])))
-            ownership.title = "Node ownership ranking"
-            ownership.xAxisLabel = "Person"
-            ownership.yAxisLabel = "Nodes Owned"
-            ownership.outFile = comparisonFolder+"ownership"
-
-        if "OWNERCENTRALITY" in v:
-            ownerCentrality.y.append((v["OWNERCENTRALITY"]["CENTRALITY"]["y"],
-                "OwnerCentrality"))
-            ownerCentrality.x.append(range(len(
-                v["OWNERCENTRALITY"]["CENTRALITY"]["x"])))
-            ownerCentrality.title = "Node centrality ranking"
-            ownerCentrality.xAxisLabel = "Person"
-            ownerCentrality.yAxisLabel = "Centrality of person's nodes"
-            ownerCentrality.outFile = comparisonFolder+"ownershipCentr"
-
-            ownerRobustness.y.append((v["OWNERCENTRALITY"]["ROBUSTNESS"]["y"],
-                "OwnerRobustness"))
-            ownerRobustness.x.append(range(len(
-                v["OWNERCENTRALITY"]["ROBUSTNESS"]["x"])))
-            ownerRobustness.title = "Node robustness ranking"
-            ownerRobustness.xAxisLabel = "Person"
-            ownerRobustness.yAxisLabel = "Robustness"
-            ownerRobustness.outFile = comparisonFolder+"ownershipRob"
-
     etx.plotData(bw="PRINTABLE")
     etx.saveData()
     link.plotData(bw="PRINTABLE")
@@ -1459,12 +1350,6 @@ def extractDataSeries(retValues):
     robustness.plotData(bw="PRINTABLE")
     singleNodeCloseness.plotData()
     singleNodeBetweenness.plotData()
-    ownership.plotData()
-    ownership.saveData()
-    ownerCentrality.plotData()
-    ownerCentrality.saveData()
-    ownerRobustness.plotData()
-    ownerRobustness.saveData()
 
 
     # some of the graph must be plotted with special configurations so that they
