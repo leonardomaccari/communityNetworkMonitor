@@ -1,8 +1,13 @@
+
+# @copyright Leonardo Maccari: leonardo.maccari@unitn.it
+# released under GPLv3 license
+
 from mechanize import Browser
 from threading import Thread
 from ConfigParser import Error
 import time
 from BeautifulSoup import BeautifulSoup
+from sqlalchemy import desc
 import gzip
 import pygraphviz as pg
 import networkx as nx
@@ -25,17 +30,26 @@ class FFGraz(plugin):
         self.localSession = lc
         self.parser = parser
         self.url=parser.get('FFGraz', 'baseTopoURL')
+        self.pseudonymDumpFile = None
+        self.pseudonymFile = None
+        self.ownerPseudonymDict = {}
         self.enabled, logLevel, self.pluginName = plugin.baseInitialize(self, 
                 parser, __file__, lc)
         self.logger = logging.getLogger(self.pluginName)
         self.logger.setLevel(logLevel)
         try:
-            self.period = plugin.convertTime(self.parser.get('ninux', 'period'))
+            self.period = self.convertTime(self.parser.get('ninux', 'period'))
         except:
+            import code
+            code.interact(local=locals())
             self.period = 600
 
-    def getStats(self):
-        """ Get the topology from FFGraz, elaborate it and store in the DB """
+    def getStats(self, refillDB=False):
+        """ Get the topology from FFGraz, elaborate it and store in the DB,
+        refillDB=True will fill with all the snapshot available found in the
+        website for the last month. WARNING, this will download thousands of
+        files, it is usable only if you have a local mirror of the topologies
+        """
         
         if self.enabled == False:
            self.logger.info(plugin.disabledMessage) 
@@ -52,23 +66,39 @@ class FFGraz(plugin):
         else:
             lastDate = lastDateFromDB[0].time
     
-        newScan = scan(network="FFGRAZ")
     
-        fileName = None
-        newDate = None
-        year, newDate = self.getLastEntry(self.url, mech)
-        month, newDate = self.getLastEntry(year, mech)
-        fileName, newDate = self.getLastEntry(month, mech)
+        if refillDB == False:
+            fileName = None
+            newDate = None
 
-        if fileName == None and newDate == None:
-            return 
+            year, newDate = self.getLastEntry(self.url, mech)
+            month, newDate = self.getLastEntry(year, mech)
+            fileName, newDate = self.getLastEntry(month, mech)
 
-        if newDate <= lastDate:
-            self.logger.error("Did not find an entry newer than "+\
-                    str(lastDate))
-            return
+            if fileName == None and newDate == None:
+                return 
 
-
+            if newDate <= lastDate:
+                self.logger.error("Did not find an entry newer than "+\
+                        str(lastDate))
+                return
+            self.addScan(mech, fileName, newDate)
+        else:
+            fileName = None
+            newDate = None
+            year, newDate = self.getLastEntry(self.url, mech)
+            month, newDate = self.getLastEntry(year, mech)
+            links = self.getAllEntries(month, mech)
+            for link in links:
+                self.addScan(mech, link[0], link[1])
+         
+ 
+    def addScan(self, mech, fileName, newDate):
+        if self.myCrypto.disabled:
+            newScan = scan(network=self.pluginName, time=newDate)
+        else:
+            newScan = scan(network=self.pluginName, time=newDate,
+                    encrypted=True)
         try:
             topoFile = mech.retrieve(fileName)
         except: 
@@ -106,9 +136,13 @@ class FFGraz(plugin):
                 simpleG.remove_edge(e[0], e[1])
         newFile = topo_file(file_url=fileName, scan_Id_r=newScan, time=newDate)
         self.localSession.add(newFile)
-        addGraphToDB(simpleG, self.localSession, newScan)
+        #FIXME NEed to add owners and emails here
+        addGraphToDB(simpleG, self.localSession, newScan, self.myCrypto)
         f.close()
         os.remove(topoFile[0])
+        #FIXME split this function in pieces and add some proper logging for
+        # begin/end of the function. Save the log message as a class plugin
+        # variable so that all plugins use the same message
     
     def aggregateNodesByName(self, graph):
         """ this function takes a graph with node names of the kind x.y.z and
@@ -207,4 +241,37 @@ class FFGraz(plugin):
                     link = col.findAll('a')
                     if len(link) != 0:
                         rowLink = url+link[0].get('href')
-        return rowLink, rowDate
+        return rowLink, rowDate 
+
+    def getAllEntries(self, url, browser):
+        """ get one entry from an HTML table list if it is newer 
+        than prevEntry. Format is from graz FF site"""
+        try:
+            page = browser.open(url)
+        except :
+            if url == None:
+                url = "(empty url)"
+            self.logger.error("Could not read url "+url)
+            return None, None
+        html = page.read()
+        soup = BeautifulSoup(html)
+        table = soup.find('table')
+        if len(table) == 0:
+            self.logger.error("No table found in "+url)
+            return None, None
+    
+        links = []
+        # skip 2 row of header
+        for row in table.findAll('tr')[2:]:
+            rowLink = "" 
+            rowDate = ""
+            for col in row:
+                if col['class'] == 'm':
+                    rowDate = datetime.strptime(col.string, "%Y-%b-%d %H:%M:%S")
+
+                if col['class'] == 'n':
+                        link = col.findAll('a')
+                        if len(link) != 0:
+                            rowLink = url+link[0].get('href')
+            links.append([rowLink, rowDate])
+        return links

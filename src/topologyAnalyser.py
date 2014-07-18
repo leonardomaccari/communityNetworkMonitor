@@ -1,5 +1,10 @@
 #!/usr/bin/python
 
+#FIXME add copyright notice to every file
+
+# @copyright Leonardo Maccari: leonardo.maccari@unitn.it
+# released under GPLv3 license
+
 from ConfigParser import SafeConfigParser
 from glob import glob
 import sys
@@ -8,10 +13,13 @@ import time
 import getopt
 import os
 import signal
+import requests
+import datetime
 
 import dbmanager
 from plugins.ninux import ninux 
 from plugins.FFGraz import FFGraz
+from plugins.FFWien import FFWien
 # import here future plugin code
 
 def getConfig():
@@ -25,10 +33,10 @@ def getConfig():
 
 
 def parseArgs():
-    """ argument parser."""
+    """ argument parser """
     C = configuration()
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "d")
+        opts, args = getopt.getopt(sys.argv[1:], "dv:h")
     except getopt.GetoptError, err:
         # print help information and exit:
         print >> sys.stderr,  str(err)
@@ -72,6 +80,8 @@ class configuration():
     }
     optionalParamsNames = {
             "-d":["daemonMode", False, False, "go to background, do not write to stdout", str],
+            "-v":["verbosity", True, 1, "verbosity level 0-2", int],
+            "-h":["help", False, False, "show the help", int],
             }
     defaultValue = False
     neededParams = {}
@@ -84,9 +94,13 @@ class configuration():
             self.optionalParams[pvalue[0]] = pvalue[2]
 
     def checkCorrectnes(self):
-        # do some errorchecking here
+        """ do some consistence checks here for the configuration parameters """
+        if self.getParam("help") == True:
+            return False
         return True
+
     def printUsage(self):
+        """ print the usage of the program """
         print >> sys.stderr
         print >> sys.stderr, "usage:",
         print >> sys.stderr, "./topologyAnalyser.py:"
@@ -96,18 +110,19 @@ class configuration():
             print >> sys.stderr, " [",pname, pvalue[3], "]"
 
     def getParam(self, paramName):
+        """ return a configuration parameter """
         for pname, pvalue in self.neededParamsNames.items():
             if pvalue[0] == paramName:
                 return self.neededParams[paramName]
         for pname, pvalue in self.optionalParamsNames.items():
             if pvalue[0] == paramName:
                 return self.optionalParams[paramName]
-        #unset parameter
         print >> sys.stderr, "coding error: the",\
             paramName, "parameter does not exist"
         sys.exit(1)
 
     def printConf(self):
+        """ just print all the configuration for debug """
         print ""
         for pname, pvalue in self.neededParams.items():
             print pname, pvalue
@@ -116,15 +131,18 @@ class configuration():
 
 
 def termHandler(signum, frame):
+    """ try to leave time to the processess to exit, so they don't 
+    leave the db in an inconsistent state """
     for i in threadList:
         i.exitAll = True
 
 threadList = []
-    
+
 if __name__ == '__main__':
     pluginConfigFiles, mainConfigFile, parser = getConfig()
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
+
     sHandler = logging.StreamHandler()
     sHandler.setLevel(logging.INFO)
     fHandler = logging.FileHandler(parser.get('main', 'logfile'))
@@ -152,20 +170,42 @@ if __name__ == '__main__':
     else:
         logger.addHandler(sHandler)
 
+    vL = C.getParam("verbosity")
+    if vL == 0:
+        logger.setLevel(logging.ERROR)
+    elif vL == 1:
+        logger.setLevel(logging.INFO)
+    elif vL == 2:
+        logger.setLevel(logging.DEBUG)
+
+    # TODO automic handling of plugins based on files
+
+    # TODO add a runlevel to initialize(). Use runlevel 0 to
+    # only return a list of valid configuration parameters
+    # then add them to the CL argument parsing in order to override 
+    # config files
 
     nnx = ninux()
     nnx.initialize(parser, localSession)
     ffg = FFGraz()
     ffg.initialize(parser, localSession)
+    ffw = FFWien()
+    ffw.initialize(parser, localSession)
     
-    threadList.append(nnx)
-    threadList.append(ffg)
+    if nnx.enabled:
+        threadList.append(nnx)
+    if ffg.enabled:
+        threadList.append(ffg)
+    if ffw.enabled:
+        threadList.append(ffw)
 
     signal.signal(signal.SIGTERM, termHandler)
-
+    # This is a throwaway variable to deal with a python bug
+    throwaway = datetime.datetime.strptime('20110101','%Y%m%d')
     try:
         for i in threadList:
             i.daemon = True
+            #FIXME run only the enabled ones
             i.start()
         while True:
             watchDog = 0
@@ -177,12 +217,14 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         termHandler(None,None)
 
+    
     logger.info("Received KILL signal")
     waitTime = 20
     while True:
         a = sum([i.is_alive() for i in threadList])
         if a != 0:
-            logger.info("Waiting %s seconds for %d threads to gracefully exit", waitTime, a)
+            logger.info("Waiting %s seconds for %d threads to gracefully exit",\
+                    waitTime, a) 
         else:
             break
         if waitTime <= 0:
